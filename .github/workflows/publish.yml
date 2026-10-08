@@ -31,68 +31,59 @@ permissions:
   contents: write
 
 jobs:
-  test-linux:
+  lint:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v6
 
-      - name: Set up Go
-        uses: actions/setup-go@v6
+      - uses: aux4/action@v1
+        with:
+          command: lint
+          strict: 'true'
+
+  test-linux:
+    needs: [lint]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
         with:
           go-version: '1.23'
 
-      - name: Install FFmpeg
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
-
-      - name: Test
-        uses: aux4/test-package-action@v1
+      - uses: aux4/action@v1
         with:
+          command: test
+          system_packages: ffmpeg
           build_command: aux4 builder linux
 
   test-darwin:
+    needs: [lint]
     runs-on: macos-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v6
 
-      - name: Set up Go
-        uses: actions/setup-go@v6
+      - uses: actions/setup-go@v6
         with:
           go-version: '1.23'
 
-      - name: Install FFmpeg
-        run: brew install ffmpeg
-
-      - name: Test
-        uses: aux4/test-package-action@v1
+      - uses: aux4/action@v1
         with:
+          command: test
+          system_packages: ffmpeg
           build_command: aux4 builder darwin
 
   publish:
     needs: [test-linux, test-darwin]
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - name: Set up Go
-        uses: actions/setup-go@v6
+      - uses: actions/setup-go@v6
         with:
           go-version: '1.23'
-
-      - name: Install aux4
-        run: |
-          curl -fsSL https://aux4.sh | sh
-          echo "$HOME/.aux4.config/packages/aux4/aux4" >> $GITHUB_PATH
-
-      - name: Build
-        run: |
-          aux4 build
 
       - name: Mint hub publish token
         id: mint
@@ -104,11 +95,11 @@ jobs:
           TOK=$(curl -sf -u "$CLIENT_ID:$CLIENT_SECRET" -d grant_type=client_credentials https://sso.aux4.io/token | jq -r '.access_token // empty')
           if [ -z "$TOK" ]; then echo "::error::client_credentials mint returned no access_token"; exit 1; fi
           echo "::add-mask::$TOK"; echo "token=$TOK" >> "$GITHUB_OUTPUT"
-      - name: Publish package
-        uses: aux4/publish-package-action@v1
+
+      - uses: aux4/action@v1
         with:
-          working_directory: package
-          package_directory: .
+          command: publish
           level: ${{ inputs.level || 'patch' }}
+          build_command: aux4 build
           aux4_token: ${{ steps.mint.outputs.token }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
