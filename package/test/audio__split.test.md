@@ -59,6 +59,55 @@ aux4 audio info tmp-split/phrases/phrase-001.wav
   "duration": 1.5,
 ```
 
+## as JSON
+
+### should list each part with its start offset and duration
+
+```execute
+aux4 audio split tmp-split/tone.wav --segment 1 --outputDir tmp-split/json --json true
+```
+
+```expect:json
+[
+  {
+    "path": "tmp-split/json/tone-001.wav",
+    "start": 0,
+    "duration": 1
+  },
+  {
+    "path": "tmp-split/json/tone-002.wav",
+    "start": 1,
+    "duration": 1
+  },
+  {
+    "path": "tmp-split/json/tone-003.wav",
+    "start": 2,
+    "duration": 0.5
+  }
+]
+```
+
+### should report the cut points found at silences
+
+```execute
+aux4 audio split tmp-split/speech.wav --silence true --outputDir tmp-split/json-silence --json true
+```
+
+```expect:json
+[
+  {
+    "path": "tmp-split/json-silence/speech-001.wav",
+    "start": 0,
+    "duration": 1.5
+  },
+  {
+    "path": "tmp-split/json-silence/speech-002.wav",
+    "start": 1.5,
+    "duration": 1.5
+  }
+]
+```
+
 ## with a format
 
 ### should encode the parts in that format

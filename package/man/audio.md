@@ -1,6 +1,6 @@
 #### Description
 
-The `audio` command provides a suite of audio tools powered by FFmpeg. It converts between formats, trims and splits recordings, joins files, normalizes loudness, changes volume and speed, applies fades, removes silence, extracts audio from video, renders waveform images and prepares recordings for speech recognition.
+The `audio` command provides a suite of audio tools powered by FFmpeg. It converts between formats, trims and splits recordings, joins files, compresses recordings to fit size limits, normalizes loudness, changes volume and speed, applies fades, removes silence, extracts audio from video, renders waveform images and prepares recordings for speech recognition.
 
 Every command validates its input file, derives a sensible output file name when `--output` is omitted, and refuses to replace an existing file unless `--overwrite true` is given. Requires `ffmpeg` and `ffprobe` to be installed.
 
@@ -25,6 +25,7 @@ Available commands:
 - **speed** — Change playback speed without changing pitch
 - **fade** — Apply a fade-in and/or fade-out
 - **trim-silence** — Remove leading and trailing silence
+- **compress** — Shrink audio for upload or speech recognition, optionally under a maximum size
 - **speech-prep** — Prepare audio for speech recognition (16 kHz mono WAV)
 - **waveform** — Render a waveform image of the audio
 

@@ -9,9 +9,10 @@ First release of `aux4/audio`, an audio toolkit powered by FFmpeg.
 - `trim` — keep a section by `--start`, `--end` or `--duration` (seconds or timecodes).
 - `extract` — audio track from a video, copied without re-encoding by default.
 - `concat` — join files of different formats, sample rates and channel counts.
-- `split` — fixed-length parts or cuts in the middle of each pause.
+- `split` — fixed-length parts or cuts in the middle of each pause; `--json true` lists each part with its start offset and duration, so per-part timestamps can be shifted back to the original timeline.
 - `normalize` — two-pass EBU R128 loudness normalization.
 - `volume`, `speed` (pitch preserved), `fade` and `trim-silence`.
+- `compress` — speech-friendly mp3, opus or m4a (mono, 16 kHz, 32 kbps by default); `--maxSize` picks the bitrate from the duration so the file fits an upload limit, and fails with a clear "split it first" message when it cannot.
 - `speech-prep` — 16 kHz mono 16-bit WAV for Whisper and other speech recognizers, from any recording including Chrome/Firefox WebM and Safari MP4.
 - `waveform` — PNG or JPG waveform image.
 

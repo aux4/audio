@@ -289,6 +289,7 @@ func runSplit(args []string) error {
 	input, segment, silence := arg(args, 0), arg(args, 1), isTrue(arg(args, 2))
 	threshold, minSilence, outputDir := arg(args, 3), arg(args, 4), arg(args, 5)
 	prefix, format, overwrite := arg(args, 6), strings.ToLower(arg(args, 7)), isTrue(arg(args, 8))
+	asJSON := isTrue(arg(args, 9))
 
 	if err := requireInput(input); err != nil {
 		return err
@@ -345,15 +346,15 @@ func runSplit(args []string) error {
 			if from <= 0.001 || to >= info.Duration-0.001 {
 				continue
 			}
-			cuts = append(cuts, (from+to)/2)
+			cuts = append(cuts, roundMillis((from+to)/2))
 		}
 	} else {
 		size, err := parsePositive("segment", segment)
 		if err != nil {
 			return err
 		}
-		for at := size; at < info.Duration-0.001; at += size {
-			cuts = append(cuts, at)
+		for n := 1; roundMillis(float64(n)*size) < info.Duration-0.001; n++ {
+			cuts = append(cuts, roundMillis(float64(n)*size))
 		}
 	}
 
@@ -386,11 +387,34 @@ func runSplit(args []string) error {
 		}
 	}
 
+	if asJSON {
+		segments := []splitSegment{}
+		for i, output := range outputs {
+			from, to := roundMillis(bounds[i]), roundMillis(bounds[i+1])
+			segments = append(segments, splitSegment{Path: output, Start: from, Duration: roundMillis(to - from)})
+		}
+		out, _ := json.MarshalIndent(segments, "", "  ")
+		fmt.Println(string(out))
+		return nil
+	}
+
 	fmt.Printf("Split %s into %d segments:\n", input, len(outputs))
 	for _, output := range outputs {
 		fmt.Println(output)
 	}
 	return nil
+}
+
+// splitSegment describes one part written by split: where it is and where it starts in the
+// original audio, so timestamps computed on the part can be shifted back.
+type splitSegment struct {
+	Path     string  `json:"path"`
+	Start    float64 `json:"start"`
+	Duration float64 `json:"duration"`
+}
+
+func roundMillis(value float64) float64 {
+	return math.Round(value*1000) / 1000
 }
 
 type loudnormReport struct {

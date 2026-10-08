@@ -233,7 +233,7 @@
         {
           "name": "split",
           "execute": [
-            "${packageDir}/aux4-audio split values(input, segment, silence, threshold, minSilence, outputDir, prefix, format, overwrite)"
+            "${packageDir}/aux4-audio split values(input, segment, silence, threshold, minSilence, outputDir, prefix, format, overwrite, json)"
           ],
           "help": {
             "text": "Split audio into parts by fixed duration or at silences",
@@ -285,6 +285,15 @@
               {
                 "name": "overwrite",
                 "text": "Replace the output file if it already exists",
+                "default": "false",
+                "options": [
+                  "true",
+                  "false"
+                ]
+              },
+              {
+                "name": "json",
+                "text": "Print the parts as JSON with path, start and duration (seconds)",
                 "default": "false",
                 "options": [
                   "true",
@@ -517,6 +526,66 @@
               {
                 "name": "output",
                 "text": "Output WAV file path (default: <input>-16k.wav)",
+                "default": ""
+              },
+              {
+                "name": "overwrite",
+                "text": "Replace the output file if it already exists",
+                "default": "false",
+                "options": [
+                  "true",
+                  "false"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "compress",
+          "execute": [
+            "${packageDir}/aux4-audio compress values(input, output, format, bitrate, sampleRate, channels, maxSize, overwrite)"
+          ],
+          "help": {
+            "text": "Shrink audio for upload or speech recognition (mono, 16 kHz, low bitrate), optionally under a maximum size",
+            "variables": [
+              {
+                "name": "input",
+                "text": "Input audio file",
+                "arg": true
+              },
+              {
+                "name": "output",
+                "text": "Output file path (default: <input>-compressed.<format>)",
+                "default": ""
+              },
+              {
+                "name": "format",
+                "text": "Output format: mp3, opus or m4a",
+                "default": "mp3",
+                "options": [
+                  "mp3",
+                  "opus",
+                  "m4a"
+                ]
+              },
+              {
+                "name": "bitrate",
+                "text": "Audio bitrate (e.g. 32k); lowered automatically to fit --maxSize",
+                "default": "32k"
+              },
+              {
+                "name": "sampleRate",
+                "text": "Sample rate in Hz",
+                "default": "16000"
+              },
+              {
+                "name": "channels",
+                "text": "Number of channels (1 = mono, 2 = stereo)",
+                "default": "1"
+              },
+              {
+                "name": "maxSize",
+                "text": "Maximum output size in bytes or with a unit (e.g. 24MB, 500KB)",
                 "default": ""
               },
               {

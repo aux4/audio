@@ -32,6 +32,7 @@ var commands = map[string]func(args []string) error{
 	"trim-silence": runTrimSilence,
 	"speech-prep":  runSpeechPrep,
 	"waveform":     runWaveform,
+	"compress":     runCompress,
 }
 
 func main() {

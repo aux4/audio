@@ -1,6 +1,6 @@
 # aux4/audio
 
-Audio toolkit powered by FFmpeg. Convert between formats, trim and split recordings, join files, normalize loudness, change volume and speed, add fades, remove silence, extract audio from video, render waveform images and prepare recordings for speech recognition — all with short, predictable commands.
+Audio toolkit powered by FFmpeg. Convert between formats, trim and split recordings, join files, compress recordings to fit upload limits, normalize loudness, change volume and speed, add fades, remove silence, extract audio from video, render waveform images and prepare recordings for speech recognition — all with short, predictable commands.
 
 ## Installation
 
@@ -31,6 +31,9 @@ aux4 audio trim episode.mp3 --start 01:30 --end 02:45 --output clip.mp3
 
 # Pull the audio out of a video
 aux4 audio extract meeting.mp4
+
+# Shrink a recording to fit a 24 MB upload limit
+aux4 audio compress meeting.wav --output meeting.mp3 --maxSize 24MB
 
 # Turn a browser recording into the 16 kHz mono WAV that Whisper expects
 aux4 audio speech-prep recording.webm
@@ -140,10 +143,10 @@ Concatenated 3 files -> episode.mp3
 
 ### split
 
-Cut a file into numbered parts, either every `--segment` seconds or in the middle of each pause with `--silence true` (pauses are quieter than `--threshold` dB, default `-35`, for at least `--minSilence` seconds, default `0.5`). Parts are written as `<prefix>-001.<ext>`, `<prefix>-002.<ext>`, ... in `--outputDir`, and their paths are printed one per line.
+Cut a file into numbered parts, either every `--segment` seconds or in the middle of each pause with `--silence true` (pauses are quieter than `--threshold` dB, default `-35`, for at least `--minSilence` seconds, default `0.5`). Parts are written as `<prefix>-001.<ext>`, `<prefix>-002.<ext>`, ... in `--outputDir`, and their paths are printed one per line, in order.
 
 ```bash
-aux4 audio split <input> (--segment <seconds> | --silence true) [--threshold <dB>] [--minSilence <seconds>] [--outputDir <dir>] [--prefix <name>] [--format <format>] [--overwrite <true|false>]
+aux4 audio split <input> (--segment <seconds> | --silence true) [--threshold <dB>] [--minSilence <seconds>] [--outputDir <dir>] [--prefix <name>] [--format <format>] [--overwrite <true|false>] [--json <true|false>]
 ```
 
 ```bash
@@ -155,6 +158,32 @@ Split lecture.mp3 into 3 segments:
 chunks/lecture-001.mp3
 chunks/lecture-002.mp3
 chunks/lecture-003.mp3
+```
+
+With `--json true`, the output is a JSON array with each part's `path`, its `start` offset and its `duration` in seconds, so timestamps computed on a part (such as a transcript) can be shifted back to the original timeline:
+
+```bash
+aux4 audio split lecture.mp3 --segment 600 --outputDir chunks --json true
+```
+
+```json
+[
+  {
+    "path": "chunks/lecture-001.mp3",
+    "start": 0,
+    "duration": 600
+  },
+  {
+    "path": "chunks/lecture-002.mp3",
+    "start": 600,
+    "duration": 600
+  },
+  {
+    "path": "chunks/lecture-003.mp3",
+    "start": 1200,
+    "duration": 287.412
+  }
+]
 ```
 
 ### normalize
@@ -235,6 +264,22 @@ aux4 audio trim-silence voice-note.m4a
 
 ```text
 Removed silence from voice-note.m4a -> voice-note-nosilence.m4a
+```
+
+### compress
+
+Make a recording as small as possible while keeping speech clear: mono, 16 kHz, 32 kbps MP3 by default, or `--format opus` / `--format m4a`. With `--maxSize` (bytes, or `KB`/`MB`/`GB` decimal and `KiB`/`MiB`/`GiB` binary), the bitrate is lowered from the input duration so the result fits, down to 8 kbps. If the audio cannot fit even at 8 kbps, nothing is written and the command fails asking you to `split` the file first. The output path, size in bytes and bitrate used are printed.
+
+```bash
+aux4 audio compress <input> --output <file> [--format <mp3|opus|m4a>] [--bitrate <rate>] [--sampleRate <hz>] [--channels <n>] [--maxSize <size>] [--overwrite <true|false>]
+```
+
+```bash
+aux4 audio compress all-hands.m4a --output upload.mp3 --maxSize 24MB
+```
+
+```text
+Compressed all-hands.m4a -> upload.mp3 (21844992 bytes, 24k)
 ```
 
 ### speech-prep
