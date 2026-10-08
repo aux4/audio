@@ -1,0 +1,7 @@
+package/dist/
+package/aux4-audio
+aux4-audio
+package/test/tmp-*/
+go.sum
+**/.DS_Store
+**/*.zip

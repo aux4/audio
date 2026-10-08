@@ -1,0 +1,277 @@
+# aux4/audio
+
+Audio toolkit powered by FFmpeg. Convert between formats, trim and split recordings, join files, normalize loudness, change volume and speed, add fades, remove silence, extract audio from video, render waveform images and prepare recordings for speech recognition — all with short, predictable commands.
+
+## Installation
+
+```bash
+aux4 aux4 pkger install aux4/audio
+```
+
+Requires `ffmpeg` and `ffprobe` (both ship with FFmpeg). The package tries to install FFmpeg automatically through your system package manager if it is not found. To install it yourself:
+
+```bash
+brew install ffmpeg            # macOS
+sudo apt install ffmpeg        # Debian / Ubuntu
+sudo dnf install ffmpeg-free   # Fedora
+apk add ffmpeg                 # Alpine
+```
+
+## Quick Start
+
+```bash
+# Inspect a file
+aux4 audio info podcast.mp3
+
+# Convert to MP3 at 128 kbps
+aux4 audio convert interview.wav --format mp3 --bitrate 128k
+
+# Keep 1:30 to 2:45
+aux4 audio trim episode.mp3 --start 01:30 --end 02:45 --output clip.mp3
+
+# Pull the audio out of a video
+aux4 audio extract meeting.mp4
+
+# Turn a browser recording into the 16 kHz mono WAV that Whisper expects
+aux4 audio speech-prep recording.webm
+```
+
+## Common Behavior
+
+- **Input** — every command checks that the input file exists and contains an audio track before doing any work.
+- **Output name** — when `--output` is omitted, the result is written next to the input with a descriptive suffix (`talk-trimmed.wav`, `talk-normalized.wav`, ...). The output format follows the output file extension.
+- **No accidental overwrites** — an existing output file is never replaced unless you pass `--overwrite true`, and the output can never be the input file itself.
+- **Negative values** — flags that take negative numbers must use an equals sign so the value is not read as another flag: `--target=-14`, `--threshold=-40`, `--level=-6dB`.
+- **Errors** — problems are reported on stderr as `Error: ...` with a non-zero exit code.
+
+## Commands
+
+### info
+
+Show the properties of the first audio track as JSON: container format, codec, duration (seconds), sample rate, channels, channel layout, bitrate and file size. Works on video files too, and measures the real duration of streamed browser recordings that have no duration header.
+
+```bash
+aux4 audio info <input>
+```
+
+```bash
+aux4 audio info podcast.mp3
+```
+
+```json
+{
+  "file": "podcast.mp3",
+  "format": "mp3",
+  "codec": "mp3",
+  "duration": 1834.512,
+  "sampleRate": 44100,
+  "channels": 2,
+  "channelLayout": "stereo",
+  "bitrate": 128000,
+  "size": 29352448
+}
+```
+
+### convert
+
+Convert audio to `mp3`, `wav`, `flac`, `ogg`, `opus`, `m4a`, `aac` or `webm`. The format comes from `--format`, or from the `--output` extension.
+
+```bash
+aux4 audio convert <input> [--format <format>] [--output <file>] [--bitrate <rate>] [--sampleRate <hz>] [--channels <n>] [--overwrite <true|false>]
+```
+
+```bash
+aux4 audio convert interview.wav --format mp3 --bitrate 128k
+```
+
+```text
+Converted interview.wav -> interview.mp3
+```
+
+`--sampleRate` and `--channels` resample and remix, e.g. `--sampleRate 16000 --channels 1` for mono 16 kHz.
+
+### trim
+
+Keep a section of the audio, defined by `--start`, `--end` and/or `--duration` (`--end` and `--duration` are mutually exclusive). Times are seconds (`1.5`) or timecodes (`01:30`, `00:01:30.250`).
+
+```bash
+aux4 audio trim <input> [--start <time>] [--end <time>] [--duration <time>] [--output <file>] [--overwrite <true|false>]
+```
+
+```bash
+aux4 audio trim episode.mp3 --start 00:01:30 --end 00:02:45 --output clip.mp3
+```
+
+```text
+Trimmed episode.mp3 (90s - 165s) -> clip.mp3
+```
+
+### extract
+
+Save the audio track of a video file. By default the audio is copied without re-encoding into a matching container (AAC → `.m4a`, MP3 → `.mp3`, Opus/Vorbis → `.ogg`, ...). Pass `--format` to re-encode.
+
+```bash
+aux4 audio extract <input> [--format <format>] [--output <file>] [--bitrate <rate>] [--overwrite <true|false>]
+```
+
+```bash
+aux4 audio extract meeting.mp4
+```
+
+```text
+Extracted audio from meeting.mp4 -> meeting.m4a
+```
+
+### concat
+
+Join two or more files in order. Inputs may differ in format, sample rate and channels; they are converted to match the first file.
+
+```bash
+aux4 audio concat <input> <input> [<input> ...] --output <file> [--overwrite <true|false>]
+```
+
+```bash
+aux4 audio concat intro.wav interview.mp3 outro.wav --output episode.mp3
+```
+
+```text
+Concatenated 3 files -> episode.mp3
+```
+
+### split
+
+Cut a file into numbered parts, either every `--segment` seconds or in the middle of each pause with `--silence true` (pauses are quieter than `--threshold` dB, default `-35`, for at least `--minSilence` seconds, default `0.5`). Parts are written as `<prefix>-001.<ext>`, `<prefix>-002.<ext>`, ... in `--outputDir`, and their paths are printed one per line.
+
+```bash
+aux4 audio split <input> (--segment <seconds> | --silence true) [--threshold <dB>] [--minSilence <seconds>] [--outputDir <dir>] [--prefix <name>] [--format <format>] [--overwrite <true|false>]
+```
+
+```bash
+aux4 audio split lecture.mp3 --segment 600 --outputDir chunks
+```
+
+```text
+Split lecture.mp3 into 3 segments:
+chunks/lecture-001.mp3
+chunks/lecture-002.mp3
+chunks/lecture-003.mp3
+```
+
+### normalize
+
+Bring a recording to a target loudness (EBU R128, two passes, linear gain). Defaults suit podcasts and spoken word: `--target -16` LUFS, `--truePeak -1.5` dBTP, `--loudnessRange 11` LU. Use `--target=-14` for music streaming or `--target=-23` for broadcast.
+
+```bash
+aux4 audio normalize <input> [--target <LUFS>] [--truePeak <dBTP>] [--loudnessRange <LU>] [--output <file>] [--overwrite <true|false>]
+```
+
+```bash
+aux4 audio normalize episode.wav
+```
+
+```text
+Normalized episode.wav (-16 LUFS) -> episode-normalized.wav
+```
+
+### volume
+
+Change the volume by a multiplier (`0.5`, `2`) or a gain in decibels (`6dB`, `--level=-3dB`).
+
+```bash
+aux4 audio volume <input> --level <level> [--output <file>] [--overwrite <true|false>]
+```
+
+```bash
+aux4 audio volume background.mp3 --level 0.3 --output background-quiet.mp3
+```
+
+```text
+Adjusted volume of background.mp3 (0.3) -> background-quiet.mp3
+```
+
+### speed
+
+Play faster or slower without changing the pitch. `--factor` ranges from `0.1` to `10`.
+
+```bash
+aux4 audio speed <input> --factor <factor> [--output <file>] [--overwrite <true|false>]
+```
+
+```bash
+aux4 audio speed lecture.mp3 --factor 1.5
+```
+
+```text
+Changed speed of lecture.mp3 (1.5x) -> lecture-speed.mp3
+```
+
+### fade
+
+Add a fade-in and/or fade-out, lengths in seconds.
+
+```bash
+aux4 audio fade <input> [--fadeIn <seconds>] [--fadeOut <seconds>] [--output <file>] [--overwrite <true|false>]
+```
+
+```bash
+aux4 audio fade jingle.wav --fadeIn 0.5 --fadeOut 2
+```
+
+```text
+Faded jingle.wav (in: 0.5s, out: 2s) -> jingle-fade.wav
+```
+
+### trim-silence
+
+Remove silence at the beginning and end (audio quieter than `--threshold` dB, default `-50`). With `--all true`, pauses inside the recording longer than `--maxPause` seconds (default `0.5`) are shortened to that length.
+
+```bash
+aux4 audio trim-silence <input> [--threshold <dB>] [--all <true|false>] [--maxPause <seconds>] [--output <file>] [--overwrite <true|false>]
+```
+
+```bash
+aux4 audio trim-silence voice-note.m4a
+```
+
+```text
+Removed silence from voice-note.m4a -> voice-note-nosilence.m4a
+```
+
+### speech-prep
+
+Convert any recording — including browser recordings (WebM/Opus from Chrome and Firefox, MP4/AAC from Safari) — into 16 kHz mono 16-bit WAV, the input format of Whisper, whisper.cpp and most speech-recognition engines. `--sampleRate` changes the rate when an engine needs something else.
+
+```bash
+aux4 audio speech-prep <input> [--sampleRate <hz>] [--output <file.wav>] [--overwrite <true|false>]
+```
+
+```bash
+aux4 audio speech-prep recording.webm
+```
+
+```text
+Prepared recording.webm for speech recognition (16000 Hz mono WAV) -> recording-16k.wav
+```
+
+### waveform
+
+Render a waveform image (`.png` with a transparent background, or `.jpg`).
+
+```bash
+aux4 audio waveform <input> [--size <WxH>] [--color <color>] [--output <file>] [--overwrite <true|false>]
+```
+
+```bash
+aux4 audio waveform episode.mp3 --size 800x120 --color "#111827" --output cover-wave.png
+```
+
+```text
+Rendered waveform of episode.mp3 (800x120) -> cover-wave.png
+```
+
+## Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `FFMPEG_PATH` | Path to the `ffmpeg` binary to use instead of the one on `PATH` |
+| `FFPROBE_PATH` | Path to the `ffprobe` binary to use instead of the one on `PATH` |

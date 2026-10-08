@@ -1,0 +1,577 @@
+{
+  "scope": "aux4",
+  "name": "audio",
+  "version": "0.1.0",
+  "description": "Audio toolkit powered by FFmpeg: convert, trim, split, join, normalize and prepare audio for speech recognition",
+  "license": "Apache-2.0",
+  "tags": [
+    "audio",
+    "ffmpeg",
+    "convert",
+    "trim",
+    "normalize",
+    "speech",
+    "whisper",
+    "mp3",
+    "wav"
+  ],
+  "system": [
+    [
+      "test:ffmpeg -version",
+      "brew:ffmpeg",
+      "apt:ffmpeg",
+      "dnf:ffmpeg-free",
+      "apk:ffmpeg"
+    ],
+    [
+      "test:ffprobe -version",
+      "brew:ffmpeg",
+      "apt:ffmpeg",
+      "dnf:ffmpeg-free",
+      "apk:ffmpeg"
+    ]
+  ],
+  "profiles": [
+    {
+      "name": "main",
+      "commands": [
+        {
+          "name": "audio",
+          "execute": [
+            "profile:audio"
+          ],
+          "help": {
+            "text": "Audio toolkit powered by FFmpeg"
+          }
+        }
+      ]
+    },
+    {
+      "name": "audio",
+      "commands": [
+        {
+          "name": "info",
+          "execute": [
+            "${packageDir}/aux4-audio info value(input)"
+          ],
+          "help": {
+            "text": "Show audio metadata (duration, codec, sample rate, channels, bitrate, format) as JSON",
+            "variables": [
+              {
+                "name": "input",
+                "text": "Input audio or video file",
+                "arg": true
+              }
+            ]
+          }
+        },
+        {
+          "name": "convert",
+          "execute": [
+            "${packageDir}/aux4-audio convert values(input, format, output, bitrate, sampleRate, channels, overwrite)"
+          ],
+          "help": {
+            "text": "Convert audio to another format (mp3, wav, flac, ogg, opus, m4a, aac, webm)",
+            "variables": [
+              {
+                "name": "input",
+                "text": "Input audio file",
+                "arg": true
+              },
+              {
+                "name": "format",
+                "text": "Target format: mp3, wav, flac, ogg, opus, m4a, aac, webm (default: taken from --output)",
+                "default": ""
+              },
+              {
+                "name": "output",
+                "text": "Output file path (default: input name with new extension)",
+                "default": ""
+              },
+              {
+                "name": "bitrate",
+                "text": "Audio bitrate (e.g. 128k, 192k)",
+                "default": ""
+              },
+              {
+                "name": "sampleRate",
+                "text": "Sample rate in Hz (e.g. 16000, 44100, 48000)",
+                "default": ""
+              },
+              {
+                "name": "channels",
+                "text": "Number of channels (1 = mono, 2 = stereo)",
+                "default": ""
+              },
+              {
+                "name": "overwrite",
+                "text": "Replace the output file if it already exists",
+                "default": "false",
+                "options": [
+                  "true",
+                  "false"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "trim",
+          "execute": [
+            "${packageDir}/aux4-audio trim values(input, start, end, duration, output, overwrite)"
+          ],
+          "help": {
+            "text": "Cut a section of audio by start, end or duration",
+            "variables": [
+              {
+                "name": "input",
+                "text": "Input audio file",
+                "arg": true
+              },
+              {
+                "name": "start",
+                "text": "Start time in seconds or [HH:]MM:SS[.ms]",
+                "default": ""
+              },
+              {
+                "name": "end",
+                "text": "End time in seconds or [HH:]MM:SS[.ms]",
+                "default": ""
+              },
+              {
+                "name": "duration",
+                "text": "Length to keep in seconds or [HH:]MM:SS[.ms]",
+                "default": ""
+              },
+              {
+                "name": "output",
+                "text": "Output file path (default: <input>-trimmed.<ext>)",
+                "default": ""
+              },
+              {
+                "name": "overwrite",
+                "text": "Replace the output file if it already exists",
+                "default": "false",
+                "options": [
+                  "true",
+                  "false"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "extract",
+          "execute": [
+            "${packageDir}/aux4-audio extract values(input, format, output, bitrate, overwrite)"
+          ],
+          "help": {
+            "text": "Extract the audio track from a video file",
+            "variables": [
+              {
+                "name": "input",
+                "text": "Input video file",
+                "arg": true
+              },
+              {
+                "name": "format",
+                "text": "Re-encode to this format (default: copy the original audio stream)",
+                "default": ""
+              },
+              {
+                "name": "output",
+                "text": "Output file path (default: input name with audio extension)",
+                "default": ""
+              },
+              {
+                "name": "bitrate",
+                "text": "Audio bitrate when re-encoding (e.g. 128k)",
+                "default": ""
+              },
+              {
+                "name": "overwrite",
+                "text": "Replace the output file if it already exists",
+                "default": "false",
+                "options": [
+                  "true",
+                  "false"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "concat",
+          "execute": [
+            "${packageDir}/aux4-audio concat values(output, overwrite) value(input*)"
+          ],
+          "help": {
+            "text": "Join multiple audio files into one",
+            "variables": [
+              {
+                "name": "input",
+                "text": "Input audio files, in order",
+                "arg": true,
+                "multiple": true
+              },
+              {
+                "name": "output",
+                "text": "Output file path"
+              },
+              {
+                "name": "overwrite",
+                "text": "Replace the output file if it already exists",
+                "default": "false",
+                "options": [
+                  "true",
+                  "false"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "split",
+          "execute": [
+            "${packageDir}/aux4-audio split values(input, segment, silence, threshold, minSilence, outputDir, prefix, format, overwrite)"
+          ],
+          "help": {
+            "text": "Split audio into parts by fixed duration or at silences",
+            "variables": [
+              {
+                "name": "input",
+                "text": "Input audio file",
+                "arg": true
+              },
+              {
+                "name": "segment",
+                "text": "Segment length in seconds",
+                "default": ""
+              },
+              {
+                "name": "silence",
+                "text": "Split at silences instead of fixed lengths",
+                "default": "false",
+                "options": [
+                  "true",
+                  "false"
+                ]
+              },
+              {
+                "name": "threshold",
+                "text": "Silence threshold in dB",
+                "default": "-35"
+              },
+              {
+                "name": "minSilence",
+                "text": "Minimum silence length in seconds",
+                "default": "0.5"
+              },
+              {
+                "name": "outputDir",
+                "text": "Directory for the parts",
+                "default": "."
+              },
+              {
+                "name": "prefix",
+                "text": "File name prefix for the parts (default: input name)",
+                "default": ""
+              },
+              {
+                "name": "format",
+                "text": "Format of the parts (default: input format)",
+                "default": ""
+              },
+              {
+                "name": "overwrite",
+                "text": "Replace the output file if it already exists",
+                "default": "false",
+                "options": [
+                  "true",
+                  "false"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "normalize",
+          "execute": [
+            "${packageDir}/aux4-audio normalize values(input, target, truePeak, loudnessRange, output, overwrite)"
+          ],
+          "help": {
+            "text": "Normalize loudness to a target level (EBU R128, two-pass)",
+            "variables": [
+              {
+                "name": "input",
+                "text": "Input audio file",
+                "arg": true
+              },
+              {
+                "name": "target",
+                "text": "Integrated loudness target in LUFS",
+                "default": "-16"
+              },
+              {
+                "name": "truePeak",
+                "text": "Maximum true peak in dBTP",
+                "default": "-1.5"
+              },
+              {
+                "name": "loudnessRange",
+                "text": "Loudness range target in LU",
+                "default": "11"
+              },
+              {
+                "name": "output",
+                "text": "Output file path (default: <input>-normalized.<ext>)",
+                "default": ""
+              },
+              {
+                "name": "overwrite",
+                "text": "Replace the output file if it already exists",
+                "default": "false",
+                "options": [
+                  "true",
+                  "false"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "volume",
+          "execute": [
+            "${packageDir}/aux4-audio volume values(input, level, output, overwrite)"
+          ],
+          "help": {
+            "text": "Change the volume by a multiplier or in decibels",
+            "variables": [
+              {
+                "name": "input",
+                "text": "Input audio file",
+                "arg": true
+              },
+              {
+                "name": "level",
+                "text": "Volume change: multiplier (0.5, 1.5) or decibels (6dB, -3dB)"
+              },
+              {
+                "name": "output",
+                "text": "Output file path (default: <input>-volume.<ext>)",
+                "default": ""
+              },
+              {
+                "name": "overwrite",
+                "text": "Replace the output file if it already exists",
+                "default": "false",
+                "options": [
+                  "true",
+                  "false"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "speed",
+          "execute": [
+            "${packageDir}/aux4-audio speed values(input, factor, output, overwrite)"
+          ],
+          "help": {
+            "text": "Change playback speed without changing pitch",
+            "variables": [
+              {
+                "name": "input",
+                "text": "Input audio file",
+                "arg": true
+              },
+              {
+                "name": "factor",
+                "text": "Speed factor (0.1 to 10, e.g. 1.5 = 50% faster)"
+              },
+              {
+                "name": "output",
+                "text": "Output file path (default: <input>-speed.<ext>)",
+                "default": ""
+              },
+              {
+                "name": "overwrite",
+                "text": "Replace the output file if it already exists",
+                "default": "false",
+                "options": [
+                  "true",
+                  "false"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "fade",
+          "execute": [
+            "${packageDir}/aux4-audio fade values(input, fadeIn, fadeOut, output, overwrite)"
+          ],
+          "help": {
+            "text": "Apply a fade-in and/or fade-out",
+            "variables": [
+              {
+                "name": "input",
+                "text": "Input audio file",
+                "arg": true
+              },
+              {
+                "name": "fadeIn",
+                "text": "Fade-in length in seconds",
+                "default": "0"
+              },
+              {
+                "name": "fadeOut",
+                "text": "Fade-out length in seconds",
+                "default": "0"
+              },
+              {
+                "name": "output",
+                "text": "Output file path (default: <input>-fade.<ext>)",
+                "default": ""
+              },
+              {
+                "name": "overwrite",
+                "text": "Replace the output file if it already exists",
+                "default": "false",
+                "options": [
+                  "true",
+                  "false"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "trim-silence",
+          "execute": [
+            "${packageDir}/aux4-audio trim-silence values(input, threshold, maxPause, all, output, overwrite)"
+          ],
+          "help": {
+            "text": "Remove leading and trailing silence (optionally all long pauses)",
+            "variables": [
+              {
+                "name": "input",
+                "text": "Input audio file",
+                "arg": true
+              },
+              {
+                "name": "threshold",
+                "text": "Silence threshold in dB",
+                "default": "-50"
+              },
+              {
+                "name": "maxPause",
+                "text": "Longest pause in seconds kept when --all is true (longer pauses are shortened to this)",
+                "default": "0.5"
+              },
+              {
+                "name": "all",
+                "text": "Also remove pauses inside the audio",
+                "default": "false",
+                "options": [
+                  "true",
+                  "false"
+                ]
+              },
+              {
+                "name": "output",
+                "text": "Output file path (default: <input>-nosilence.<ext>)",
+                "default": ""
+              },
+              {
+                "name": "overwrite",
+                "text": "Replace the output file if it already exists",
+                "default": "false",
+                "options": [
+                  "true",
+                  "false"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "speech-prep",
+          "execute": [
+            "${packageDir}/aux4-audio speech-prep values(input, sampleRate, output, overwrite)"
+          ],
+          "help": {
+            "text": "Prepare audio for speech recognition (16 kHz mono 16-bit WAV)",
+            "variables": [
+              {
+                "name": "input",
+                "text": "Input audio or video file (e.g. a browser recording)",
+                "arg": true
+              },
+              {
+                "name": "sampleRate",
+                "text": "Sample rate in Hz",
+                "default": "16000"
+              },
+              {
+                "name": "output",
+                "text": "Output WAV file path (default: <input>-16k.wav)",
+                "default": ""
+              },
+              {
+                "name": "overwrite",
+                "text": "Replace the output file if it already exists",
+                "default": "false",
+                "options": [
+                  "true",
+                  "false"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "waveform",
+          "execute": [
+            "${packageDir}/aux4-audio waveform values(input, size, color, output, overwrite)"
+          ],
+          "help": {
+            "text": "Render a waveform image (PNG or JPG) of the audio",
+            "variables": [
+              {
+                "name": "input",
+                "text": "Input audio file",
+                "arg": true
+              },
+              {
+                "name": "size",
+                "text": "Image size WIDTHxHEIGHT",
+                "default": "1200x200"
+              },
+              {
+                "name": "color",
+                "text": "Waveform color name or hex (e.g. blue, #3b82f6)",
+                "default": "#3b82f6"
+              },
+              {
+                "name": "output",
+                "text": "Output image path (default: <input>-waveform.png)",
+                "default": ""
+              },
+              {
+                "name": "overwrite",
+                "text": "Replace the output file if it already exists",
+                "default": "false",
+                "options": [
+                  "true",
+                  "false"
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
