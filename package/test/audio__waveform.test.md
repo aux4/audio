@@ -9,12 +9,12 @@ ffmpeg -hide_banner -loglevel error -y -f lavfi -i sine=frequency=440:sample_rat
 rm -rf tmp-waveform
 ```
 
-## with default options
+## with an output file
 
-### should render a PNG next to the input
+### should render a PNG file
 
 ```execute
-aux4 audio waveform tmp-waveform/tone.wav && test -s tmp-waveform/tone-waveform.png && echo "image written"
+aux4 audio waveform tmp-waveform/tone.wav --output tmp-waveform/tone-waveform.png && test -s tmp-waveform/tone-waveform.png && echo "image written"
 ```
 
 ```expect

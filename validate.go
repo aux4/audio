@@ -73,20 +73,6 @@ func basename(path string) string {
 	return strings.TrimSuffix(path, filepath.Ext(path))
 }
 
-// defaultOutput derives "<input without extension><suffix>.<ext>" when no output was given.
-func defaultOutput(output, input, suffix, ext string) string {
-	if output != "" {
-		return output
-	}
-	if ext == "" {
-		ext = extOf(input)
-	}
-	if ext == "" {
-		return basename(input) + suffix
-	}
-	return basename(input) + suffix + "." + ext
-}
-
 // parseTime accepts seconds (90, 1.5) or [HH:]MM:SS[.ms] and returns seconds.
 func parseTime(name, value string) (float64, error) {
 	if !timePattern.MatchString(value) {

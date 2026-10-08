@@ -14,7 +14,7 @@ rm -rf tmp-trim
 ### should keep the section between start and end
 
 ```execute
-aux4 audio trim tmp-trim/tone.wav --start 1 --end 2.5
+aux4 audio trim tmp-trim/tone.wav --start 1 --end 2.5 --output tmp-trim/tone-trimmed.wav
 ```
 
 ```expect

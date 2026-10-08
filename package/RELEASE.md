@@ -16,4 +16,6 @@ First release of `aux4/audio`, an audio toolkit powered by FFmpeg.
 - `speech-prep` — 16 kHz mono 16-bit WAV for Whisper and other speech recognizers, from any recording including Chrome/Firefox WebM and Safari MP4.
 - `waveform` — PNG or JPG waveform image.
 
+Streaming and pipes: the single-file commands read audio from stdin when no input file is given, and stream the result to stdout when `--output` is omitted, so `cat recording.webm | aux4 audio speech-prep | aux4 whisper transcribe` works. stdout then carries only audio bytes and all messages go to stderr. MP4/M4A input and commands that need the whole recording buffer stdin to a temporary file that is always removed.
+
 Every command validates its input, never replaces an existing file unless `--overwrite true` is given, and explains how to install FFmpeg when it is missing.

@@ -11,38 +11,22 @@ import (
 	"strings"
 )
 
-// job describes a single-input ffmpeg transcode.
-type job struct {
-	input     string
-	output    string
-	inputArgs []string // options placed before -i (e.g. -ss)
-	filter    string   // -af filter graph
-	args      []string // extra output options
-}
-
-// run encodes the output with the codec that matches its extension.
-func (j job) run() error {
-	argv := append([]string{}, j.inputArgs...)
-	argv = append(argv, "-i", mediaPath(j.input), "-vn")
-	if j.filter != "" {
-		argv = append(argv, "-af", j.filter)
-	}
-	argv = append(argv, codecArgs(extOf(j.output))...)
-	argv = append(argv, j.args...)
-	argv = append(argv, "-y", mediaPath(j.output))
-	return runFFmpeg(argv...)
+// encode returns the codec options for the output format.
+func encode(out *mediaOutput) []string {
+	return codecArgs(out.format)
 }
 
 func runInfo(args []string) error {
-	input := arg(args, 0)
-	if err := requireInput(input); err != nil {
-		return err
-	}
-
-	info, err := probe(input)
+	in, err := openInput(arg(args, 0), true)
 	if err != nil {
 		return err
 	}
+
+	info, err := probe(in.path)
+	if err != nil {
+		return err
+	}
+	info.File = in.label
 
 	out, _ := json.MarshalIndent(info, "", "  ")
 	fmt.Println(string(out))
@@ -50,50 +34,39 @@ func runInfo(args []string) error {
 }
 
 func runConvert(args []string) error {
-	input, format, output := arg(args, 0), strings.ToLower(arg(args, 1)), arg(args, 2)
+	input, format, output := arg(args, 0), arg(args, 1), arg(args, 2)
 	bitrate, sampleRate, channels, overwrite := arg(args, 3), arg(args, 4), arg(args, 5), isTrue(arg(args, 6))
 
-	if err := requireInput(input); err != nil {
-		return err
-	}
-	if format == "" && output != "" {
-		format = extOf(output)
-	}
-	if format == "" {
+	if output != "" && format == "" && !isAudioFormat(extOf(output)) {
 		return errorf("provide --format (%s) or an --output file with one of these extensions", strings.Join(audioFormats, ", "))
 	}
-	if !isAudioFormat(format) {
-		return errorf("unsupported format %q: use one of %s", format, strings.Join(audioFormats, ", "))
-	}
-
-	output = defaultOutput(output, input, "", format)
-	if err := checkOutput(output, overwrite, input); err != nil {
-		return err
-	}
-
-	encode, err := encodeArgs(bitrate, sampleRate, channels)
+	options, err := encodeArgs(bitrate, sampleRate, channels)
 	if err != nil {
 		return err
 	}
 
-	argv := []string{"-i", mediaPath(input), "-vn"}
-	argv = append(argv, codecArgs(format)...)
-	argv = append(argv, encode...)
-	argv = append(argv, "-f", muxerFor(format), "-y", mediaPath(output))
-	if err := runFFmpeg(argv...); err != nil {
+	in, err := openInput(input, false)
+	if err != nil {
+		return err
+	}
+	out, err := resolveOutput(output, format, in, "", overwrite)
+	if err != nil {
 		return err
 	}
 
-	fmt.Printf("Converted %s -> %s\n", input, output)
+	after := append([]string{"-map", "0:a:0", "-vn"}, encode(out)...)
+	if err := transcode(in, out, nil, append(after, options...)); err != nil {
+		return err
+	}
+
+	out.say("Converted %s -> %s", in.label, out.label())
 	return nil
 }
 
 func runTrim(args []string) error {
-	input, start, end, duration, output, overwrite := arg(args, 0), arg(args, 1), arg(args, 2), arg(args, 3), arg(args, 4), isTrue(arg(args, 5))
+	input, start, end, duration, output := arg(args, 0), arg(args, 1), arg(args, 2), arg(args, 3), arg(args, 4)
+	overwrite, format := isTrue(arg(args, 5)), arg(args, 6)
 
-	if err := requireInput(input); err != nil {
-		return err
-	}
 	if start == "" && end == "" && duration == "" {
 		return errorf("provide at least one of --start, --end or --duration")
 	}
@@ -108,26 +81,16 @@ func runTrim(args []string) error {
 			return err
 		}
 	}
-
-	info, err := probe(input)
-	if err != nil {
-		return err
-	}
-	if from >= info.Duration {
-		return errorf("start (%ss) is beyond the end of the audio (%ss)", formatSeconds(from), formatSeconds(info.Duration))
-	}
-
-	length := info.Duration - from
+	var to, length float64
 	if end != "" {
-		to, err := parseTime("end", end)
-		if err != nil {
+		if to, err = parseTime("end", end); err != nil {
 			return err
 		}
 		if to <= from {
 			return errorf("end (%ss) must be after start (%ss)", formatSeconds(to), formatSeconds(from))
 		}
-		length = to - from
-	} else if duration != "" {
+	}
+	if duration != "" {
 		if length, err = parseTime("duration", duration); err != nil {
 			return err
 		}
@@ -136,23 +99,36 @@ func runTrim(args []string) error {
 		}
 	}
 
-	output = defaultOutput(output, input, "-trimmed", "")
-	if err := checkOutput(output, overwrite, input); err != nil {
+	in, err := openInput(input, true)
+	if err != nil {
+		return err
+	}
+	out, err := resolveOutput(output, format, in, "wav", overwrite)
+	if err != nil {
 		return err
 	}
 
-	j := job{
-		input:     input,
-		output:    output,
-		inputArgs: []string{"-ss", formatSeconds(from)},
-		args:      []string{"-t", formatSeconds(length)},
+	info, err := probe(in.path)
+	if err != nil {
+		return err
 	}
-	if err := j.run(); err != nil {
+	if from >= info.Duration {
+		return errorf("start (%ss) is beyond the end of the audio (%ss)", formatSeconds(from), formatSeconds(info.Duration))
+	}
+	switch {
+	case end != "":
+		length = to - from
+	case duration == "":
+		length = info.Duration - from
+	}
+
+	after := append([]string{"-vn", "-t", formatSeconds(length)}, encode(out)...)
+	if err := transcode(in, out, []string{"-ss", formatSeconds(from)}, after); err != nil {
 		return err
 	}
 
 	stop := math.Min(from+length, info.Duration)
-	fmt.Printf("Trimmed %s (%ss - %ss) -> %s\n", input, formatSeconds(from), formatSeconds(math.Round(stop*1000)/1000), output)
+	out.say("Trimmed %s (%ss - %ss) -> %s", in.label, formatSeconds(from), formatSeconds(roundMillis(stop)), out.label())
 	return nil
 }
 
@@ -168,59 +144,66 @@ var copyContainers = map[string]string{
 	"eac3":   "eac3",
 }
 
+func copyContainer(codec string) string {
+	if ext, ok := copyContainers[codec]; ok {
+		return ext
+	}
+	if strings.HasPrefix(codec, "pcm_") {
+		return "wav"
+	}
+	return "mka"
+}
+
 func runExtract(args []string) error {
 	input, format, output, bitrate, overwrite := arg(args, 0), strings.ToLower(arg(args, 1)), arg(args, 2), arg(args, 3), isTrue(arg(args, 4))
 
-	if err := requireInput(input); err != nil {
+	in, err := openInput(input, true)
+	if err != nil {
 		return err
 	}
-
-	info, err := probe(input)
+	info, err := probe(in.path)
 	if err != nil {
 		return err
 	}
 
-	copyStream := format == "" && output == ""
-	if format == "" && output != "" {
-		format = extOf(output)
-		copyStream = copyContainers[info.Codec] == format
-	}
+	container := copyContainer(info.Codec)
+	copyStream := format == "" && (output == "" || extOf(output) == container)
 
-	argv := []string{"-i", mediaPath(input), "-map", "0:a:0", "-vn", "-sn", "-dn"}
+	var out *mediaOutput
 	if copyStream {
-		ext, ok := copyContainers[info.Codec]
-		if !ok {
-			if strings.HasPrefix(info.Codec, "pcm_") {
-				ext = "wav"
-			} else {
-				ext = "mka"
+		if output != "" {
+			if err := checkOutput(output, overwrite, in.files()...); err != nil {
+				return err
 			}
 		}
-		format = ext
-		argv = append(argv, "-c:a", "copy")
+		out = &mediaOutput{path: output, format: container}
 	} else {
+		if format == "" {
+			format = extOf(output)
+		}
 		if !isAudioFormat(format) {
 			return errorf("unsupported format %q: use one of %s", format, strings.Join(audioFormats, ", "))
 		}
-		encode, err := encodeArgs(bitrate, "", "")
+		if out, err = resolveOutput(output, format, in, "", overwrite); err != nil {
+			return err
+		}
+	}
+
+	after := []string{"-map", "0:a:0", "-vn", "-sn", "-dn"}
+	if copyStream {
+		after = append(after, "-c:a", "copy")
+	} else {
+		options, err := encodeArgs(bitrate, "", "")
 		if err != nil {
 			return err
 		}
-		argv = append(argv, codecArgs(format)...)
-		argv = append(argv, encode...)
+		after = append(append(after, encode(out)...), options...)
 	}
-
-	output = defaultOutput(output, input, "", format)
-	if err := checkOutput(output, overwrite, input); err != nil {
+	if err := transcode(in, out, nil, after); err != nil {
 		return err
 	}
 
-	argv = append(argv, "-y", mediaPath(output))
-	if err := runFFmpeg(argv...); err != nil {
-		return err
-	}
-
-	fmt.Printf("Extracted audio from %s -> %s\n", input, output)
+	out.say("Extracted audio from %s -> %s", in.label, out.label())
 	return nil
 }
 
@@ -275,6 +258,7 @@ func runConcat(args []string) error {
 	argv = append(argv, codecArgs(extOf(output))...)
 	argv = append(argv, "-y", mediaPath(output))
 	if err := runFFmpeg(argv...); err != nil {
+		_ = os.Remove(output)
 		return err
 	}
 
@@ -333,7 +317,7 @@ func runSplit(args []string) error {
 			return err
 		}
 
-		report, err := runFFmpegReport("-i", mediaPath(input), "-vn", "-af",
+		report, err := runFFmpegReport(nil, "-i", mediaPath(input), "-vn", "-af",
 			fmt.Sprintf("silencedetect=noise=%sdB:d=%s", formatSeconds(db), formatSeconds(gap)), "-f", "null", "-")
 		if err != nil {
 			return err
@@ -374,15 +358,12 @@ func runSplit(args []string) error {
 		return errorf("cannot create output directory %s: %s", outputDir, err.Error())
 	}
 
+	in := &mediaInput{path: input, label: input}
 	for i, output := range outputs {
 		from, to := bounds[i], bounds[i+1]
-		j := job{
-			input:     input,
-			output:    output,
-			inputArgs: []string{"-ss", formatSeconds(from)},
-			args:      []string{"-t", formatSeconds(math.Round((to-from)*1e6) / 1e6)},
-		}
-		if err := j.run(); err != nil {
+		out := &mediaOutput{path: output, format: format}
+		after := append([]string{"-vn", "-t", formatSeconds(math.Round((to-from)*1e6) / 1e6)}, encode(out)...)
+		if err := transcode(in, out, []string{"-ss", formatSeconds(from)}, after); err != nil {
 			return err
 		}
 	}
@@ -426,11 +407,8 @@ type loudnormReport struct {
 }
 
 func runNormalize(args []string) error {
-	input, target, truePeak, loudnessRange, output, overwrite := arg(args, 0), arg(args, 1), arg(args, 2), arg(args, 3), arg(args, 4), isTrue(arg(args, 5))
-
-	if err := requireInput(input); err != nil {
-		return err
-	}
+	input, target, truePeak, loudnessRange, output := arg(args, 0), arg(args, 1), arg(args, 2), arg(args, 3), arg(args, 4)
+	overwrite, format := isTrue(arg(args, 5)), arg(args, 6)
 
 	i, err := parseSigned("target", target)
 	if err != nil {
@@ -454,80 +432,88 @@ func runNormalize(args []string) error {
 		return errorf("invalid loudnessRange %q: must be between 1 and 50 LU", loudnessRange)
 	}
 
-	output = defaultOutput(output, input, "-normalized", "")
-	if err := checkOutput(output, overwrite, input); err != nil {
+	in, err := openInput(input, true)
+	if err != nil {
+		return err
+	}
+	out, err := resolveOutput(output, format, in, "wav", overwrite)
+	if err != nil {
 		return err
 	}
 
-	info, err := probe(input)
+	info, err := probe(in.path)
 	if err != nil {
 		return err
 	}
 
 	base := fmt.Sprintf("loudnorm=I=%s:TP=%s:LRA=%s", formatSeconds(i), formatSeconds(tp), formatSeconds(lra))
-	report, err := runFFmpegReport("-i", mediaPath(input), "-vn", "-af", base+":print_format=json", "-f", "null", "-")
+	report, err := runFFmpegReport(nil, "-i", in.arg(), "-vn", "-af", base+":print_format=json", "-f", "null", "-")
 	if err != nil {
 		return err
 	}
 
 	open, close := strings.LastIndex(report, "{"), strings.LastIndex(report, "}")
 	if open < 0 || close < open {
-		return errorf("could not measure loudness of %s", input)
+		return errorf("could not measure loudness of %s", in.label)
 	}
 	var measured loudnormReport
 	if err := json.Unmarshal([]byte(report[open:close+1]), &measured); err != nil {
-		return errorf("could not parse loudness measurement of %s: %s", input, err.Error())
+		return errorf("could not parse loudness measurement of %s: %s", in.label, err.Error())
 	}
 	for _, value := range []string{measured.InputI, measured.InputTP, measured.InputLRA, measured.InputThresh, measured.TargetOffset} {
 		if !signedPattern.MatchString(value) {
-			return errorf("cannot normalize %s: the audio is silent or too short to measure", input)
+			return errorf("cannot normalize %s: the audio is silent or too short to measure", in.label)
 		}
 	}
 
 	filter := fmt.Sprintf("%s:measured_I=%s:measured_TP=%s:measured_LRA=%s:measured_thresh=%s:offset=%s:linear=true",
 		base, measured.InputI, measured.InputTP, measured.InputLRA, measured.InputThresh, measured.TargetOffset)
 
-	j := job{input: input, output: output, filter: filter}
+	after := append([]string{"-vn", "-af", filter}, encode(out)...)
 	if info.SampleRate > 0 {
-		j.args = []string{"-ar", strconv.Itoa(info.SampleRate)}
+		after = append(after, "-ar", strconv.Itoa(info.SampleRate))
 	}
-	if err := j.run(); err != nil {
+	if err := transcode(in, out, nil, after); err != nil {
 		return err
 	}
 
-	fmt.Printf("Normalized %s (%s LUFS) -> %s\n", input, formatSeconds(i), output)
+	out.say("Normalized %s (%s LUFS) -> %s", in.label, formatSeconds(i), out.label())
 	return nil
 }
 
-func runVolume(args []string) error {
-	input, level, output, overwrite := arg(args, 0), arg(args, 1), arg(args, 2), isTrue(arg(args, 3))
-
-	if err := requireInput(input); err != nil {
-		return err
+// filterCommand is the shared shape of the single-filter commands.
+func filterCommand(input, output, format string, overwrite bool, filter string) (*mediaInput, *mediaOutput, error) {
+	in, err := openInput(input, false)
+	if err != nil {
+		return nil, nil, err
 	}
+	out, err := resolveOutput(output, format, in, "wav", overwrite)
+	if err != nil {
+		return nil, nil, err
+	}
+	after := append([]string{"-vn", "-af", filter}, encode(out)...)
+	return in, out, transcode(in, out, nil, after)
+}
+
+func runVolume(args []string) error {
+	input, level, output, overwrite, format := arg(args, 0), arg(args, 1), arg(args, 2), isTrue(arg(args, 3)), arg(args, 4)
+
 	if !volumePattern.MatchString(level) {
 		return errorf("invalid level %q: use a multiplier (e.g. 0.5, 1.5) or decibels (e.g. 6dB, -3dB)", level)
 	}
 
-	output = defaultOutput(output, input, "-volume", "")
-	if err := checkOutput(output, overwrite, input); err != nil {
+	in, out, err := filterCommand(input, output, format, overwrite, "volume="+level)
+	if err != nil {
 		return err
 	}
 
-	if err := (job{input: input, output: output, filter: "volume=" + level}).run(); err != nil {
-		return err
-	}
-
-	fmt.Printf("Adjusted volume of %s (%s) -> %s\n", input, level, output)
+	out.say("Adjusted volume of %s (%s) -> %s", in.label, level, out.label())
 	return nil
 }
 
 func runSpeed(args []string) error {
-	input, factor, output, overwrite := arg(args, 0), arg(args, 1), arg(args, 2), isTrue(arg(args, 3))
+	input, factor, output, overwrite, format := arg(args, 0), arg(args, 1), arg(args, 2), isTrue(arg(args, 3)), arg(args, 4)
 
-	if err := requireInput(input); err != nil {
-		return err
-	}
 	value, err := parsePositive("factor", factor)
 	if err != nil {
 		return err
@@ -536,16 +522,12 @@ func runSpeed(args []string) error {
 		return errorf("invalid factor %q: must be between 0.1 and 10", factor)
 	}
 
-	output = defaultOutput(output, input, "-speed", "")
-	if err := checkOutput(output, overwrite, input); err != nil {
+	in, out, err := filterCommand(input, output, format, overwrite, atempoChain(value))
+	if err != nil {
 		return err
 	}
 
-	if err := (job{input: input, output: output, filter: atempoChain(value)}).run(); err != nil {
-		return err
-	}
-
-	fmt.Printf("Changed speed of %s (%sx) -> %s\n", input, formatSeconds(value), output)
+	out.say("Changed speed of %s (%sx) -> %s", in.label, formatSeconds(value), out.label())
 	return nil
 }
 
@@ -565,64 +547,65 @@ func atempoChain(factor float64) string {
 }
 
 func runFade(args []string) error {
-	input, fadeIn, fadeOut, output, overwrite := arg(args, 0), arg(args, 1), arg(args, 2), arg(args, 3), isTrue(arg(args, 4))
+	input, fadeIn, fadeOut, output := arg(args, 0), arg(args, 1), arg(args, 2), arg(args, 3)
+	overwrite, format := isTrue(arg(args, 4)), arg(args, 5)
 
-	if err := requireInput(input); err != nil {
-		return err
-	}
 	if fadeIn == "" {
 		fadeIn = "0"
 	}
 	if fadeOut == "" {
 		fadeOut = "0"
 	}
-	in, err := parseNonNegative("fadeIn", fadeIn)
+	fin, err := parseNonNegative("fadeIn", fadeIn)
 	if err != nil {
 		return err
 	}
-	out, err := parseNonNegative("fadeOut", fadeOut)
+	fout, err := parseNonNegative("fadeOut", fadeOut)
 	if err != nil {
 		return err
 	}
-	if in == 0 && out == 0 {
+	if fin == 0 && fout == 0 {
 		return errorf("provide --fadeIn and/or --fadeOut (in seconds)")
 	}
 
-	info, err := probe(input)
+	in, err := openInput(input, true)
 	if err != nil {
 		return err
 	}
-	if in > info.Duration || out > info.Duration {
+	out, err := resolveOutput(output, format, in, "wav", overwrite)
+	if err != nil {
+		return err
+	}
+
+	info, err := probe(in.path)
+	if err != nil {
+		return err
+	}
+	if fin > info.Duration || fout > info.Duration {
 		return errorf("fade is longer than the audio (%ss)", formatSeconds(info.Duration))
 	}
 
-	output = defaultOutput(output, input, "-fade", "")
-	if err := checkOutput(output, overwrite, input); err != nil {
-		return err
-	}
-
 	filters := []string{}
-	if in > 0 {
-		filters = append(filters, fmt.Sprintf("afade=t=in:st=0:d=%s", formatSeconds(in)))
+	if fin > 0 {
+		filters = append(filters, fmt.Sprintf("afade=t=in:st=0:d=%s", formatSeconds(fin)))
 	}
-	if out > 0 {
-		filters = append(filters, fmt.Sprintf("afade=t=out:st=%s:d=%s", formatSeconds(math.Max(0, info.Duration-out)), formatSeconds(out)))
+	if fout > 0 {
+		filters = append(filters, fmt.Sprintf("afade=t=out:st=%s:d=%s", formatSeconds(math.Max(0, info.Duration-fout)), formatSeconds(fout)))
 	}
 
-	if err := (job{input: input, output: output, filter: strings.Join(filters, ",")}).run(); err != nil {
+	after := append([]string{"-vn", "-af", strings.Join(filters, ",")}, encode(out)...)
+	if err := transcode(in, out, nil, after); err != nil {
 		return err
 	}
 
-	fmt.Printf("Faded %s (in: %ss, out: %ss) -> %s\n", input, formatSeconds(in), formatSeconds(out), output)
+	out.say("Faded %s (in: %ss, out: %ss) -> %s", in.label, formatSeconds(fin), formatSeconds(fout), out.label())
 	return nil
 }
 
 func runTrimSilence(args []string) error {
-	input, threshold, maxPause, all, output, overwrite := arg(args, 0), arg(args, 1), arg(args, 2), isTrue(arg(args, 3)), arg(args, 4), isTrue(arg(args, 5))
+	input, threshold, maxPause, all, output := arg(args, 0), arg(args, 1), arg(args, 2), isTrue(arg(args, 3)), arg(args, 4)
+	overwrite, format := isTrue(arg(args, 5)), arg(args, 6)
 
-	if err := requireInput(input); err != nil {
-		return err
-	}
 	db, err := parseSigned("threshold", threshold)
 	if err != nil {
 		return err
@@ -635,11 +618,6 @@ func runTrimSilence(args []string) error {
 		return err
 	}
 
-	output = defaultOutput(output, input, "-nosilence", "")
-	if err := checkOutput(output, overwrite, input); err != nil {
-		return err
-	}
-
 	level := formatSeconds(db) + "dB"
 	edge := "silenceremove=start_periods=1:start_duration=0:start_threshold=" + level
 	filter := edge + ",areverse," + edge + ",areverse"
@@ -647,75 +625,97 @@ func runTrimSilence(args []string) error {
 		filter += fmt.Sprintf(",silenceremove=stop_periods=-1:stop_duration=%s:stop_threshold=%s", formatSeconds(gap), level)
 	}
 
-	if err := (job{input: input, output: output, filter: filter}).run(); err != nil {
+	// Removing silence at the end reverses the whole audio, so the input is read in full.
+	in, err := openInput(input, all)
+	if err != nil {
+		return err
+	}
+	out, err := resolveOutput(output, format, in, "wav", overwrite)
+	if err != nil {
+		return err
+	}
+	after := append([]string{"-vn", "-af", filter}, encode(out)...)
+	if err := transcode(in, out, nil, after); err != nil {
 		return err
 	}
 
-	fmt.Printf("Removed silence from %s -> %s\n", input, output)
+	out.say("Removed silence from %s -> %s", in.label, out.label())
 	return nil
 }
 
 func runSpeechPrep(args []string) error {
 	input, sampleRate, output, overwrite := arg(args, 0), arg(args, 1), arg(args, 2), isTrue(arg(args, 3))
 
-	if err := requireInput(input); err != nil {
-		return err
-	}
 	if sampleRate == "" {
 		sampleRate = "16000"
 	}
-	encode, err := encodeArgs("", sampleRate, "1")
+	options, err := encodeArgs("", sampleRate, "1")
+	if err != nil {
+		return err
+	}
+	if output != "" && extOf(output) != "wav" {
+		return errorf("speech-prep writes WAV audio: the output file must end in .wav (got %s)", output)
+	}
+
+	in, err := openInput(input, false)
+	if err != nil {
+		return err
+	}
+	out, err := resolveOutput(output, "wav", in, "wav", overwrite)
 	if err != nil {
 		return err
 	}
 
-	output = defaultOutput(output, input, "-16k", "wav")
-	if extOf(output) != "wav" {
-		return errorf("speech-prep writes WAV audio: the output file must end in .wav (got %s)", output)
-	}
-	if err := checkOutput(output, overwrite, input); err != nil {
+	after := append([]string{"-map", "0:a:0", "-vn", "-c:a", "pcm_s16le"}, options...)
+	if err := transcode(in, out, nil, after); err != nil {
 		return err
 	}
 
-	argv := []string{"-i", mediaPath(input), "-map", "0:a:0", "-vn", "-c:a", "pcm_s16le"}
-	argv = append(argv, encode...)
-	argv = append(argv, "-y", mediaPath(output))
-	if err := runFFmpeg(argv...); err != nil {
-		return err
-	}
-
-	fmt.Printf("Prepared %s for speech recognition (%s Hz mono WAV) -> %s\n", input, sampleRate, output)
+	out.say("Prepared %s for speech recognition (%s Hz mono WAV) -> %s", in.label, sampleRate, out.label())
 	return nil
 }
 
 func runWaveform(args []string) error {
 	input, size, color, output, overwrite := arg(args, 0), arg(args, 1), arg(args, 2), arg(args, 3), isTrue(arg(args, 4))
 
-	if err := requireInput(input); err != nil {
-		return err
-	}
 	if !sizePattern.MatchString(size) {
 		return errorf("invalid size %q: use WIDTHxHEIGHT (e.g. 1200x200)", size)
 	}
 	if !colorPattern.MatchString(color) {
 		return errorf("invalid color %q: use a color name (e.g. blue) or hex value (e.g. #3b82f6)", color)
 	}
-
-	output = defaultOutput(output, input, "-waveform", "png")
-	ext := extOf(output)
-	if ext != "png" && ext != "jpg" && ext != "jpeg" {
-		return errorf("waveform output must be a .png or .jpg file (got %s)", output)
+	if output != "" {
+		ext := extOf(output)
+		if ext != "png" && ext != "jpg" && ext != "jpeg" {
+			return errorf("waveform output must be a .png or .jpg file (got %s)", output)
+		}
 	}
-	if err := checkOutput(output, overwrite, input); err != nil {
+
+	in, err := openInput(input, false)
+	if err != nil {
 		return err
+	}
+
+	out := &mediaOutput{path: output, format: "png"}
+	if output != "" {
+		if err := checkOutput(output, overwrite, in.files()...); err != nil {
+			return err
+		}
 	}
 
 	filter := fmt.Sprintf("[0:a:0]showwavespic=s=%s:colors=%s[out]", size, color)
-	if err := runFFmpeg("-i", mediaPath(input), "-filter_complex", filter, "-map", "[out]", "-frames:v", "1", "-update", "1", "-y", mediaPath(output)); err != nil {
+	argv := []string{"-i", in.arg(), "-filter_complex", filter, "-map", "[out]", "-frames:v", "1"}
+	if out.streaming() {
+		argv = append(argv, "-c:v", "png", "-f", "image2pipe", "pipe:1")
+	} else {
+		argv = append(argv, "-update", "1", "-y", mediaPath(output))
+	}
+	if _, err := execFFmpegIO("error", argv, in.stream, out.writer()); err != nil {
+		out.discardPartial()
 		return err
 	}
 
-	fmt.Printf("Rendered waveform of %s (%s) -> %s\n", input, size, output)
+	out.say("Rendered waveform of %s (%s) -> %s", in.label, size, out.label())
 	return nil
 }
 
@@ -735,6 +735,8 @@ func muxerFor(format string) string {
 		return "ipod"
 	case "aac":
 		return "adts"
+	case "mka":
+		return "matroska"
 	}
 	return format
 }

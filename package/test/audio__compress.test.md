@@ -46,14 +46,35 @@ test "$(wc -c < tmp-compress/speech.mp3)" -lt "$(wc -c < tmp-compress/speech.wav
 smaller
 ```
 
-### should name the output after the input when --output is omitted
+### should stream to stdout when --output is omitted
 
 ```execute
-aux4 audio compress tmp-compress/speech.wav
+aux4 audio compress tmp-compress/speech.wav | aux4 audio info
 ```
 
-```expect:regex
-^Compressed tmp-compress/speech\.wav -> tmp-compress/speech-compressed\.mp3 \(\d+ bytes, 32k\)$
+```expect:partial
+  "codec": "mp3",
+**
+  "sampleRate": 16000,
+  "channels": 1,
+```
+
+```error:regex
+^Compressed tmp-compress/speech\.wav -> stdout \(\d+ bytes, 32k\)$
+```
+
+### should stream a size-limited file from stdin
+
+```execute
+cat tmp-compress/speech.wav | aux4 audio compress --maxSize 50KB | wc -c | awk '$1 <= 50000 { print "fits" }'
+```
+
+```expect
+fits
+```
+
+```error:regex
+^Compressed stdin -> stdout \(\d+ bytes, 8k\)$
 ```
 
 ## with other formats

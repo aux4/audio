@@ -14,7 +14,7 @@ rm -rf tmp-speed
 ### should speed up the audio
 
 ```execute
-aux4 audio speed tmp-speed/tone.wav --factor 2
+aux4 audio speed tmp-speed/tone.wav --factor 2 --output tmp-speed/tone-speed.wav
 ```
 
 ```expect

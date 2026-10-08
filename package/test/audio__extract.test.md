@@ -10,12 +10,12 @@ ffmpeg -hide_banner -loglevel error -y -f lavfi -i testsrc=size=64x64:rate=10:du
 rm -rf tmp-extract
 ```
 
-## with default options
+## with an output file in the original codec's container
 
-### should copy the audio track into a matching container
+### should copy the audio track without re-encoding
 
 ```execute
-aux4 audio extract tmp-extract/video.mp4
+aux4 audio extract tmp-extract/video.mp4 --output tmp-extract/video.m4a
 ```
 
 ```expect
@@ -37,7 +37,7 @@ aux4 audio info tmp-extract/video.m4a
 ### should re-encode to the requested format
 
 ```execute
-aux4 audio extract tmp-extract/video.mp4 --format mp3 --bitrate 96k && aux4 audio info tmp-extract/video.mp3
+aux4 audio extract tmp-extract/video.mp4 --format mp3 --bitrate 96k --output tmp-extract/video.mp3 && aux4 audio info tmp-extract/video.mp3
 ```
 
 ```expect:partial

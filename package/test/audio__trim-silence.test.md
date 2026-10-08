@@ -15,7 +15,7 @@ rm -rf tmp-trim-silence
 ### should remove silence at both ends
 
 ```execute
-aux4 audio trim-silence tmp-trim-silence/padded.wav
+aux4 audio trim-silence tmp-trim-silence/padded.wav --output tmp-trim-silence/padded-nosilence.wav
 ```
 
 ```expect

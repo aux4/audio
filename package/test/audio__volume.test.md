@@ -14,7 +14,7 @@ rm -rf tmp-volume
 ### should scale the volume
 
 ```execute
-aux4 audio volume tmp-volume/tone.wav --level 0.5
+aux4 audio volume tmp-volume/tone.wav --level 0.5 --output tmp-volume/tone-volume.wav
 ```
 
 ```expect

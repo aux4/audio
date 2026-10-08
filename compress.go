@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"io"
 	"math"
 	"os"
 	"regexp"
@@ -96,9 +96,6 @@ func runCompress(args []string) error {
 	bitrate, sampleRate, channels := arg(args, 3), arg(args, 4), arg(args, 5)
 	maxSize, overwrite := arg(args, 6), isTrue(arg(args, 7))
 
-	if err := requireInput(input); err != nil {
-		return err
-	}
 	if format == "" {
 		format = "mp3"
 	}
@@ -139,27 +136,54 @@ func runCompress(args []string) error {
 		}
 	}
 
-	output = defaultOutput(output, input, "-compressed", format)
-	if extOf(output) != format {
-		return errorf("output file %s does not match --format %s: use a .%s extension", output, format, format)
+	// Fitting a size limit needs the duration, so stdin is read in full first.
+	in, err := openInput(input, limit > 0)
+	if err != nil {
+		return err
 	}
-	if err := checkOutput(output, overwrite, input); err != nil {
+	out, err := resolveOutput(output, format, in, format, overwrite)
+	if err != nil {
 		return err
 	}
 
-	info, err := probe(input)
+	encodeTo := func(target *mediaOutput, bitsPerSecond int) error {
+		after := []string{"-map", "0:a:0", "-vn", "-map_metadata", "-1"}
+		after = append(after, codecArgs(format)...)
+		after = append(after, "-b:a", strconv.Itoa(bitsPerSecond), "-ar", sampleRate, "-ac", channels)
+		return transcode(in, target, nil, after)
+	}
+
+	if limit == 0 {
+		encoded := snapBitrate(format, bits, rate)
+		if err := encodeTo(out, encoded); err != nil {
+			return err
+		}
+		out.say("Compressed %s -> %s (%d bytes, %dk)", in.label, out.label(), outputSize(out), encoded/1000)
+		return nil
+	}
+
+	info, err := probe(in.path)
 	if err != nil {
 		return err
 	}
 	if info.Duration <= 0 {
-		return errorf("cannot compress %s: the audio has no duration", input)
+		return errorf("cannot compress %s: the audio has no duration", in.label)
+	}
+
+	// Encode to a file first so the size can be checked; when streaming, the file is a
+	// temporary one that is copied to stdout once it fits.
+	file := out
+	if out.streaming() {
+		path, err := tempFile(format)
+		if err != nil {
+			return err
+		}
+		file = &mediaOutput{path: path, format: format}
 	}
 
 	target := bits
-	if limit > 0 {
-		if fit := fitBitrate(limit, info.Duration); fit < target {
-			target = fit
-		}
+	if fit := fitBitrate(limit, info.Duration); fit < target {
+		target = fit
 	}
 
 	written := false
@@ -167,27 +191,28 @@ func runCompress(args []string) error {
 		encoded := snapBitrate(format, target, rate)
 		if encoded < minCompressBitrate {
 			if written {
-				_ = os.Remove(output)
+				file.discardPartial()
 			}
 			return errorf("%s (%ss) cannot fit in %s even at the minimum bitrate of %dk: split it first (e.g. aux4 audio split --segment <seconds>)",
-				input, formatSeconds(info.Duration), maxSize, minCompressBitrate/1000)
+				in.label, formatSeconds(info.Duration), maxSize, minCompressBitrate/1000)
 		}
 
-		argv := []string{"-i", mediaPath(input), "-map", "0:a:0", "-vn", "-map_metadata", "-1"}
-		argv = append(argv, codecArgs(format)...)
-		argv = append(argv, "-b:a", strconv.Itoa(encoded), "-ar", sampleRate, "-ac", channels)
-		argv = append(argv, "-f", muxerFor(format), "-y", mediaPath(output))
-		if err := runFFmpeg(argv...); err != nil {
+		if err := encodeTo(file, encoded); err != nil {
 			return err
 		}
 		written = true
 
-		stat, err := os.Stat(output)
+		stat, err := os.Stat(file.path)
 		if err != nil {
-			return errorf("compressed file was not written: %s", output)
+			return errorf("compressed file was not written: %s", file.path)
 		}
-		if limit == 0 || stat.Size() <= limit {
-			fmt.Printf("Compressed %s -> %s (%d bytes, %dk)\n", input, output, stat.Size(), encoded/1000)
+		if stat.Size() <= limit {
+			if out.streaming() {
+				if err := copyToStdout(file.path, out); err != nil {
+					return err
+				}
+			}
+			out.say("Compressed %s -> %s (%d bytes, %dk)", in.label, out.label(), stat.Size(), encoded/1000)
 			return nil
 		}
 
@@ -195,8 +220,34 @@ func runCompress(args []string) error {
 		target = int(float64(encoded) * float64(limit) / float64(stat.Size()) * 0.95)
 	}
 
-	_ = os.Remove(output)
-	return errorf("could not compress %s under %s: split it first (e.g. aux4 audio split --segment <seconds>)", input, maxSize)
+	file.discardPartial()
+	return errorf("could not compress %s under %s: split it first (e.g. aux4 audio split --segment <seconds>)", in.label, maxSize)
+}
+
+// outputSize is the number of bytes written to the output file or stdout.
+func outputSize(out *mediaOutput) int64 {
+	if out.streaming() {
+		if out.stdout == nil {
+			return 0
+		}
+		return out.stdout.n
+	}
+	if stat, err := os.Stat(out.path); err == nil {
+		return stat.Size()
+	}
+	return 0
+}
+
+func copyToStdout(path string, out *mediaOutput) error {
+	file, err := os.Open(path)
+	if err != nil {
+		return errorf("cannot read %s: %s", path, err.Error())
+	}
+	defer file.Close()
+	if _, err := io.Copy(out.writer(), file); err != nil {
+		return errorf("cannot write to stdout: %s", err.Error())
+	}
+	return nil
 }
 
 func isOpusRate(rate int) bool {

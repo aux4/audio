@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"os/exec"
@@ -39,27 +40,40 @@ func mediaPath(path string) string {
 
 // runFFmpeg executes ffmpeg with an argv array (never through a shell).
 func runFFmpeg(args ...string) error {
-	_, err := execFFmpeg("error", args)
+	_, err := execFFmpegIO("error", args, nil, nil)
 	return err
 }
 
 // runFFmpegReport executes ffmpeg at info log level and returns its stderr, where filters
 // like loudnorm and silencedetect write their reports.
-func runFFmpegReport(args ...string) (string, error) {
-	return execFFmpeg("info", args)
+func runFFmpegReport(stdin io.Reader, args ...string) (string, error) {
+	return execFFmpegIO("info", args, stdin, nil)
 }
 
-func execFFmpeg(logLevel string, args []string) (string, error) {
+// execFFmpegIO runs ffmpeg with optional stdin (for pipe:0) and stdout (for pipe:1).
+// Anything ffmpeg prints is captured and only surfaced in error messages, so stdout
+// carries nothing but media bytes.
+func execFFmpegIO(logLevel string, args []string, stdin io.Reader, stdout io.Writer) (string, error) {
 	bin, err := tool("ffmpeg")
 	if err != nil {
 		return "", err
 	}
 
-	base := []string{"-hide_banner", "-nostdin", "-v", logLevel}
+	base := []string{"-hide_banner", "-nostats", "-v", logLevel}
+	if stdin == nil {
+		base = append(base, "-nostdin")
+	}
 	cmd := exec.Command(bin, append(base, args...)...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
-	cmd.Stdout = &stderr
+	if stdout != nil {
+		cmd.Stdout = stdout
+	} else {
+		cmd.Stdout = &stderr
+	}
+	if stdin != nil {
+		cmd.Stdin = stdin
+	}
 
 	if err := cmd.Run(); err != nil {
 		return stderr.String(), fmt.Errorf("ffmpeg failed: %s", lastLines(stderr.String(), 3))

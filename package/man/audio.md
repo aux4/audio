@@ -2,7 +2,17 @@
 
 The `audio` command provides a suite of audio tools powered by FFmpeg. It converts between formats, trims and splits recordings, joins files, compresses recordings to fit size limits, normalizes loudness, changes volume and speed, applies fades, removes silence, extracts audio from video, renders waveform images and prepares recordings for speech recognition.
 
-Every command validates its input file, derives a sensible output file name when `--output` is omitted, and refuses to replace an existing file unless `--overwrite true` is given. Requires `ffmpeg` and `ffprobe` to be installed.
+Requires `ffmpeg` and `ffprobe` to be installed.
+
+**Streaming and pipes.** The single-file commands (`info`, `convert`, `trim`, `extract`, `normalize`, `volume`, `speed`, `fade`, `trim-silence`, `compress`, `speech-prep`, `waveform`) work in pipelines:
+
+- **Input** — give a file, or leave the input out (or pass `/dev/stdin`) to read audio piped into the command.
+- **Output** — with `--output <file>` the result is saved to that file; without `--output` the result is streamed to stdout. In that case stdout carries only the audio bytes and every message goes to stderr.
+- **Format** — when streaming, the output format comes from `--format`; `convert` requires it, `speech-prep` always writes WAV, `compress` defaults to MP3, `waveform` writes PNG, and the other commands keep the input format (WAV when it cannot be recognized).
+
+`concat` and `split` work with files only.
+
+Every command validates its input, refuses to replace an existing file unless `--overwrite true` is given, and exits with a non-zero code and an `Error: ...` message on stderr when something fails.
 
 Flags that take negative numbers (such as `--target`, `--threshold` or a `-6dB` volume level) must be written with an equals sign, for example `--target=-14`, so the value is not mistaken for another flag.
 
@@ -32,9 +42,13 @@ Available commands:
 #### Example
 
 ```bash
-aux4 audio convert interview.wav --format mp3 --bitrate 128k
+aux4 audio convert interview.wav --format mp3 --bitrate 128k --output interview.mp3
 ```
 
 ```text
 Converted interview.wav -> interview.mp3
+```
+
+```bash
+cat recording.webm | aux4 audio speech-prep | aux4 whisper transcribe
 ```

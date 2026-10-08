@@ -15,7 +15,7 @@ rm -rf tmp-normalize
 ### should normalize to -16 LUFS
 
 ```execute
-aux4 audio normalize tmp-normalize/quiet.wav
+aux4 audio normalize tmp-normalize/quiet.wav --output tmp-normalize/quiet-normalized.wav
 ```
 
 ```expect

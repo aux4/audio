@@ -11,16 +11,18 @@ With `--maxSize`, the bitrate is calculated from the duration of the input so th
 
 `--maxSize` accepts bytes (`25000000`) or a size with a unit. `KB`, `MB` and `GB` are decimal (1 MB = 1,000,000 bytes); `KiB`, `MiB` and `GiB` are binary (1 MiB = 1,048,576 bytes).
 
-The command prints the output path, its size in bytes and the bitrate used. Video tracks and metadata are dropped. Opus files always report a 48 kHz playback rate in `aux4 audio info`, whatever rate they were encoded at.
+With `--output`, the result is saved to that file. Without it, the result is streamed to stdout and the message goes to stderr. When no input file is given, the audio is read from stdin; with `--maxSize` the piped audio is read in full first and the result is checked before anything is written to stdout.
+
+The command prints the output path (or `stdout`), its size in bytes and the bitrate used. Video tracks and metadata are dropped. Opus files always report a 48 kHz playback rate in `aux4 audio info`, whatever rate they were encoded at.
 
 #### Usage
 
 ```bash
-aux4 audio compress <input> --output <file> [--format <mp3|opus|m4a>] [--bitrate <rate>] [--sampleRate <hz>] [--channels <n>] [--maxSize <size>] [--overwrite <true|false>]
+aux4 audio compress [<input>] [--output <file>] [--format <mp3|opus|m4a>] [--bitrate <rate>] [--sampleRate <hz>] [--channels <n>] [--maxSize <size>] [--overwrite <true|false>]
 ```
 
-<input>       Audio or video file to compress
---output      Output file path; the extension must match --format (default: <input>-compressed.<format>)
+<input>       Audio or video file to compress (default: read from stdin)
+--output      Output file path; the extension must match --format (default: write to stdout)
 --format      Output format: mp3, opus or m4a (default: mp3)
 --bitrate     Audio bitrate, at least 8k (default: 32k)
 --sampleRate  Sample rate in Hz (default: 16000); opus accepts 8000, 12000, 16000, 24000 or 48000

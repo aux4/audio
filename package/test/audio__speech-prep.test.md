@@ -15,7 +15,7 @@ rm -rf tmp-speech-prep
 ### should write a 16 kHz mono WAV
 
 ```execute
-aux4 audio speech-prep tmp-speech-prep/chrome.webm
+aux4 audio speech-prep tmp-speech-prep/chrome.webm --output tmp-speech-prep/chrome-16k.wav
 ```
 
 ```expect

@@ -9,12 +9,12 @@ ffmpeg -hide_banner -loglevel error -y -f lavfi -i sine=frequency=440:sample_rat
 rm -rf tmp-convert
 ```
 
-## with default output name
+## with an output file
 
-### should convert using the input name with the new extension
+### should write the converted file
 
 ```execute
-aux4 audio convert tmp-convert/tone.wav --format mp3
+aux4 audio convert tmp-convert/tone.wav --format mp3 --output tmp-convert/tone.mp3
 ```
 
 ```expect
@@ -51,7 +51,7 @@ Converted tmp-convert/tone.wav -> tmp-convert/tone-64k.mp3
 ### should resample to mono flac
 
 ```execute
-aux4 audio convert tmp-convert/tone.wav --format flac --sampleRate 16000 --channels 1 && aux4 audio info tmp-convert/tone.flac
+aux4 audio convert tmp-convert/tone.wav --format flac --sampleRate 16000 --channels 1 --output tmp-convert/tone.flac && aux4 audio info tmp-convert/tone.flac
 ```
 
 ```expect:partial
@@ -69,7 +69,7 @@ Converted tmp-convert/tone.wav -> tmp-convert/tone.flac
 ### should convert to opus
 
 ```execute
-aux4 audio convert tmp-convert/tone.wav --format opus && aux4 audio info tmp-convert/tone.opus
+aux4 audio convert tmp-convert/tone.wav --format opus --output tmp-convert/tone.opus && aux4 audio info tmp-convert/tone.opus
 ```
 
 ```expect:partial
@@ -79,7 +79,7 @@ aux4 audio convert tmp-convert/tone.wav --format opus && aux4 audio info tmp-con
 ### should convert to m4a
 
 ```execute
-aux4 audio convert tmp-convert/tone.wav --format m4a && aux4 audio info tmp-convert/tone.m4a
+aux4 audio convert tmp-convert/tone.wav --format m4a --output tmp-convert/tone.m4a && aux4 audio info tmp-convert/tone.m4a
 ```
 
 ```expect:partial
@@ -89,7 +89,7 @@ aux4 audio convert tmp-convert/tone.wav --format m4a && aux4 audio info tmp-conv
 ### should convert to webm
 
 ```execute
-aux4 audio convert tmp-convert/tone.wav --format webm && aux4 audio info tmp-convert/tone.webm
+aux4 audio convert tmp-convert/tone.wav --format webm --output tmp-convert/tone.webm && aux4 audio info tmp-convert/tone.webm
 ```
 
 ```expect:partial
@@ -114,7 +114,7 @@ Converted tmp-convert/tone.wav -> tmp-convert/from-ext.ogg
 ### should refuse to overwrite it
 
 ```execute
-aux4 audio convert tmp-convert/tone.wav --format mp3
+aux4 audio convert tmp-convert/tone.wav --output tmp-convert/tone.mp3
 ```
 
 ```error:partial
@@ -124,7 +124,7 @@ Error: output file already exists: tmp-convert/tone.mp3 (use --overwrite true to
 ### should replace it with --overwrite true
 
 ```execute
-aux4 audio convert tmp-convert/tone.wav --format mp3 --overwrite true
+aux4 audio convert tmp-convert/tone.wav --output tmp-convert/tone.mp3 --overwrite true
 ```
 
 ```expect
@@ -143,14 +143,24 @@ aux4 audio convert tmp-convert/tone.wav --format xyz
 Error: unsupported format "xyz": use one of mp3, wav, flac, ogg, opus, m4a, aac, webm
 ```
 
-### should ask for a format when neither --format nor --output is given
+### should require a format when writing to stdout
 
 ```execute
 aux4 audio convert tmp-convert/tone.wav
 ```
 
 ```error:partial
-Error: provide --format (mp3, wav, flac, ogg, opus, m4a, aac, webm) or an --output file with one of these extensions
+Error: --format is required when writing to stdout (no --output given): use one of mp3, wav, flac, ogg, opus, m4a, aac, webm
+```
+
+### should reject an output extension that does not match the format
+
+```execute
+aux4 audio convert tmp-convert/tone.wav --format mp3 --output tmp-convert/mismatch.ogg
+```
+
+```error:partial
+Error: output file tmp-convert/mismatch.ogg does not match --format mp3: use a .mp3 extension
 ```
 
 ### should reject an invalid bitrate
@@ -166,7 +176,7 @@ Error: invalid bitrate "fast": use a value like 128k or 192000
 ### should refuse to write over the input file
 
 ```execute
-aux4 audio convert tmp-convert/tone.wav --format wav
+aux4 audio convert tmp-convert/tone.wav --output tmp-convert/tone.wav
 ```
 
 ```error:partial

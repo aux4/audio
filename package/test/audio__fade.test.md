@@ -14,7 +14,7 @@ rm -rf tmp-fade
 ### should apply both fades
 
 ```execute
-aux4 audio fade tmp-fade/tone.wav --fadeIn 1 --fadeOut 0.5
+aux4 audio fade tmp-fade/tone.wav --fadeIn 1 --fadeOut 0.5 --output tmp-fade/tone-fade.wav
 ```
 
 ```expect

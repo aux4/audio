@@ -47,7 +47,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := run(os.Args[2:]); err != nil {
+	handleSignals()
+	err := run(os.Args[2:])
+	removeTemps()
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %s\n", err.Error())
 		os.Exit(1)
 	}

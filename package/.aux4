@@ -2,7 +2,7 @@
   "scope": "aux4",
   "name": "audio",
   "version": "0.1.0",
-  "description": "Audio toolkit powered by FFmpeg: convert, trim, split, join, normalize and prepare audio for speech recognition",
+  "description": "Audio toolkit powered by FFmpeg: convert, trim, split, join, compress, normalize and prepare audio for speech recognition, with pipe support",
   "license": "Apache-2.0",
   "tags": [
     "audio",
@@ -10,6 +10,7 @@
     "convert",
     "trim",
     "normalize",
+    "compress",
     "speech",
     "whisper",
     "mp3",
@@ -52,15 +53,16 @@
         {
           "name": "info",
           "execute": [
-            "${packageDir}/aux4-audio info value(input)"
+            "stdin:${packageDir}/aux4-audio info value(input)"
           ],
           "help": {
             "text": "Show audio metadata (duration, codec, sample rate, channels, bitrate, format) as JSON",
             "variables": [
               {
                 "name": "input",
-                "text": "Input audio or video file",
-                "arg": true
+                "text": "Input audio or video file (default: read from stdin)",
+                "arg": true,
+                "default": ""
               }
             ]
           }
@@ -68,24 +70,25 @@
         {
           "name": "convert",
           "execute": [
-            "${packageDir}/aux4-audio convert values(input, format, output, bitrate, sampleRate, channels, overwrite)"
+            "stdin:${packageDir}/aux4-audio convert values(input, format, output, bitrate, sampleRate, channels, overwrite)"
           ],
           "help": {
             "text": "Convert audio to another format (mp3, wav, flac, ogg, opus, m4a, aac, webm)",
             "variables": [
               {
                 "name": "input",
-                "text": "Input audio file",
-                "arg": true
+                "text": "Input audio file (default: read from stdin)",
+                "arg": true,
+                "default": ""
               },
               {
                 "name": "format",
-                "text": "Target format: mp3, wav, flac, ogg, opus, m4a, aac, webm (default: taken from --output)",
+                "text": "Target format: mp3, wav, flac, ogg, opus, m4a, aac, webm (required when writing to stdout; default: taken from --output)",
                 "default": ""
               },
               {
                 "name": "output",
-                "text": "Output file path (default: input name with new extension)",
+                "text": "Output file path (default: write to stdout)",
                 "default": ""
               },
               {
@@ -118,15 +121,16 @@
         {
           "name": "trim",
           "execute": [
-            "${packageDir}/aux4-audio trim values(input, start, end, duration, output, overwrite)"
+            "stdin:${packageDir}/aux4-audio trim values(input, start, end, duration, output, overwrite, format)"
           ],
           "help": {
             "text": "Cut a section of audio by start, end or duration",
             "variables": [
               {
                 "name": "input",
-                "text": "Input audio file",
-                "arg": true
+                "text": "Input audio file (default: read from stdin)",
+                "arg": true,
+                "default": ""
               },
               {
                 "name": "start",
@@ -145,7 +149,7 @@
               },
               {
                 "name": "output",
-                "text": "Output file path (default: <input>-trimmed.<ext>)",
+                "text": "Output file path (default: write to stdout)",
                 "default": ""
               },
               {
@@ -156,6 +160,11 @@
                   "true",
                   "false"
                 ]
+              },
+              {
+                "name": "format",
+                "text": "Output format when writing to stdout: mp3, wav, flac, ogg, opus, m4a, aac, webm (default: input format, else wav)",
+                "default": ""
               }
             ]
           }
@@ -163,15 +172,16 @@
         {
           "name": "extract",
           "execute": [
-            "${packageDir}/aux4-audio extract values(input, format, output, bitrate, overwrite)"
+            "stdin:${packageDir}/aux4-audio extract values(input, format, output, bitrate, overwrite)"
           ],
           "help": {
             "text": "Extract the audio track from a video file",
             "variables": [
               {
                 "name": "input",
-                "text": "Input video file",
-                "arg": true
+                "text": "Input video file (default: read from stdin)",
+                "arg": true,
+                "default": ""
               },
               {
                 "name": "format",
@@ -180,7 +190,7 @@
               },
               {
                 "name": "output",
-                "text": "Output file path (default: input name with audio extension)",
+                "text": "Output file path (default: write to stdout)",
                 "default": ""
               },
               {
@@ -306,15 +316,16 @@
         {
           "name": "normalize",
           "execute": [
-            "${packageDir}/aux4-audio normalize values(input, target, truePeak, loudnessRange, output, overwrite)"
+            "stdin:${packageDir}/aux4-audio normalize values(input, target, truePeak, loudnessRange, output, overwrite, format)"
           ],
           "help": {
             "text": "Normalize loudness to a target level (EBU R128, two-pass)",
             "variables": [
               {
                 "name": "input",
-                "text": "Input audio file",
-                "arg": true
+                "text": "Input audio file (default: read from stdin)",
+                "arg": true,
+                "default": ""
               },
               {
                 "name": "target",
@@ -333,7 +344,7 @@
               },
               {
                 "name": "output",
-                "text": "Output file path (default: <input>-normalized.<ext>)",
+                "text": "Output file path (default: write to stdout)",
                 "default": ""
               },
               {
@@ -344,6 +355,11 @@
                   "true",
                   "false"
                 ]
+              },
+              {
+                "name": "format",
+                "text": "Output format when writing to stdout: mp3, wav, flac, ogg, opus, m4a, aac, webm (default: input format, else wav)",
+                "default": ""
               }
             ]
           }
@@ -351,15 +367,16 @@
         {
           "name": "volume",
           "execute": [
-            "${packageDir}/aux4-audio volume values(input, level, output, overwrite)"
+            "stdin:${packageDir}/aux4-audio volume values(input, level, output, overwrite, format)"
           ],
           "help": {
             "text": "Change the volume by a multiplier or in decibels",
             "variables": [
               {
                 "name": "input",
-                "text": "Input audio file",
-                "arg": true
+                "text": "Input audio file (default: read from stdin)",
+                "arg": true,
+                "default": ""
               },
               {
                 "name": "level",
@@ -367,7 +384,7 @@
               },
               {
                 "name": "output",
-                "text": "Output file path (default: <input>-volume.<ext>)",
+                "text": "Output file path (default: write to stdout)",
                 "default": ""
               },
               {
@@ -378,6 +395,11 @@
                   "true",
                   "false"
                 ]
+              },
+              {
+                "name": "format",
+                "text": "Output format when writing to stdout: mp3, wav, flac, ogg, opus, m4a, aac, webm (default: input format, else wav)",
+                "default": ""
               }
             ]
           }
@@ -385,15 +407,16 @@
         {
           "name": "speed",
           "execute": [
-            "${packageDir}/aux4-audio speed values(input, factor, output, overwrite)"
+            "stdin:${packageDir}/aux4-audio speed values(input, factor, output, overwrite, format)"
           ],
           "help": {
             "text": "Change playback speed without changing pitch",
             "variables": [
               {
                 "name": "input",
-                "text": "Input audio file",
-                "arg": true
+                "text": "Input audio file (default: read from stdin)",
+                "arg": true,
+                "default": ""
               },
               {
                 "name": "factor",
@@ -401,7 +424,7 @@
               },
               {
                 "name": "output",
-                "text": "Output file path (default: <input>-speed.<ext>)",
+                "text": "Output file path (default: write to stdout)",
                 "default": ""
               },
               {
@@ -412,6 +435,11 @@
                   "true",
                   "false"
                 ]
+              },
+              {
+                "name": "format",
+                "text": "Output format when writing to stdout: mp3, wav, flac, ogg, opus, m4a, aac, webm (default: input format, else wav)",
+                "default": ""
               }
             ]
           }
@@ -419,15 +447,16 @@
         {
           "name": "fade",
           "execute": [
-            "${packageDir}/aux4-audio fade values(input, fadeIn, fadeOut, output, overwrite)"
+            "stdin:${packageDir}/aux4-audio fade values(input, fadeIn, fadeOut, output, overwrite, format)"
           ],
           "help": {
             "text": "Apply a fade-in and/or fade-out",
             "variables": [
               {
                 "name": "input",
-                "text": "Input audio file",
-                "arg": true
+                "text": "Input audio file (default: read from stdin)",
+                "arg": true,
+                "default": ""
               },
               {
                 "name": "fadeIn",
@@ -441,7 +470,7 @@
               },
               {
                 "name": "output",
-                "text": "Output file path (default: <input>-fade.<ext>)",
+                "text": "Output file path (default: write to stdout)",
                 "default": ""
               },
               {
@@ -452,6 +481,11 @@
                   "true",
                   "false"
                 ]
+              },
+              {
+                "name": "format",
+                "text": "Output format when writing to stdout: mp3, wav, flac, ogg, opus, m4a, aac, webm (default: input format, else wav)",
+                "default": ""
               }
             ]
           }
@@ -459,15 +493,16 @@
         {
           "name": "trim-silence",
           "execute": [
-            "${packageDir}/aux4-audio trim-silence values(input, threshold, maxPause, all, output, overwrite)"
+            "stdin:${packageDir}/aux4-audio trim-silence values(input, threshold, maxPause, all, output, overwrite, format)"
           ],
           "help": {
             "text": "Remove leading and trailing silence (optionally all long pauses)",
             "variables": [
               {
                 "name": "input",
-                "text": "Input audio file",
-                "arg": true
+                "text": "Input audio file (default: read from stdin)",
+                "arg": true,
+                "default": ""
               },
               {
                 "name": "threshold",
@@ -490,7 +525,7 @@
               },
               {
                 "name": "output",
-                "text": "Output file path (default: <input>-nosilence.<ext>)",
+                "text": "Output file path (default: write to stdout)",
                 "default": ""
               },
               {
@@ -501,41 +536,11 @@
                   "true",
                   "false"
                 ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "speech-prep",
-          "execute": [
-            "${packageDir}/aux4-audio speech-prep values(input, sampleRate, output, overwrite)"
-          ],
-          "help": {
-            "text": "Prepare audio for speech recognition (16 kHz mono 16-bit WAV)",
-            "variables": [
-              {
-                "name": "input",
-                "text": "Input audio or video file (e.g. a browser recording)",
-                "arg": true
               },
               {
-                "name": "sampleRate",
-                "text": "Sample rate in Hz",
-                "default": "16000"
-              },
-              {
-                "name": "output",
-                "text": "Output WAV file path (default: <input>-16k.wav)",
+                "name": "format",
+                "text": "Output format when writing to stdout: mp3, wav, flac, ogg, opus, m4a, aac, webm (default: input format, else wav)",
                 "default": ""
-              },
-              {
-                "name": "overwrite",
-                "text": "Replace the output file if it already exists",
-                "default": "false",
-                "options": [
-                  "true",
-                  "false"
-                ]
               }
             ]
           }
@@ -543,19 +548,20 @@
         {
           "name": "compress",
           "execute": [
-            "${packageDir}/aux4-audio compress values(input, output, format, bitrate, sampleRate, channels, maxSize, overwrite)"
+            "stdin:${packageDir}/aux4-audio compress values(input, output, format, bitrate, sampleRate, channels, maxSize, overwrite)"
           ],
           "help": {
             "text": "Shrink audio for upload or speech recognition (mono, 16 kHz, low bitrate), optionally under a maximum size",
             "variables": [
               {
                 "name": "input",
-                "text": "Input audio file",
-                "arg": true
+                "text": "Input audio file (default: read from stdin)",
+                "arg": true,
+                "default": ""
               },
               {
                 "name": "output",
-                "text": "Output file path (default: <input>-compressed.<format>)",
+                "text": "Output file path (default: write to stdout)",
                 "default": ""
               },
               {
@@ -601,17 +607,54 @@
           }
         },
         {
+          "name": "speech-prep",
+          "execute": [
+            "stdin:${packageDir}/aux4-audio speech-prep values(input, sampleRate, output, overwrite)"
+          ],
+          "help": {
+            "text": "Prepare audio for speech recognition (16 kHz mono 16-bit WAV)",
+            "variables": [
+              {
+                "name": "input",
+                "text": "Input audio or video file, e.g. a browser recording (default: read from stdin)",
+                "arg": true,
+                "default": ""
+              },
+              {
+                "name": "sampleRate",
+                "text": "Sample rate in Hz",
+                "default": "16000"
+              },
+              {
+                "name": "output",
+                "text": "Output WAV file path (default: write to stdout)",
+                "default": ""
+              },
+              {
+                "name": "overwrite",
+                "text": "Replace the output file if it already exists",
+                "default": "false",
+                "options": [
+                  "true",
+                  "false"
+                ]
+              }
+            ]
+          }
+        },
+        {
           "name": "waveform",
           "execute": [
-            "${packageDir}/aux4-audio waveform values(input, size, color, output, overwrite)"
+            "stdin:${packageDir}/aux4-audio waveform values(input, size, color, output, overwrite)"
           ],
           "help": {
             "text": "Render a waveform image (PNG or JPG) of the audio",
             "variables": [
               {
                 "name": "input",
-                "text": "Input audio file",
-                "arg": true
+                "text": "Input audio file (default: read from stdin)",
+                "arg": true,
+                "default": ""
               },
               {
                 "name": "size",
@@ -625,7 +668,7 @@
               },
               {
                 "name": "output",
-                "text": "Output image path (default: <input>-waveform.png)",
+                "text": "Output image path, .png or .jpg (default: PNG to stdout)",
                 "default": ""
               },
               {
