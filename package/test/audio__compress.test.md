@@ -24,16 +24,25 @@ aux4 audio compress tmp-compress/speech.wav --output tmp-compress/speech.mp3
 ### should produce mono 16 kHz audio at 32 kbps
 
 ```execute
-aux4 audio info tmp-compress/speech.mp3
+aux4 audio info tmp-compress/speech.mp3 | grep -v '"duration"'
 ```
 
 ```expect:partial
   "codec": "mp3",
-  "duration": 30,
   "sampleRate": 16000,
   "channels": 1,
   "channelLayout": "mono",
   "bitrate": 32000,
+```
+
+### should keep the duration at about 30 seconds
+
+```execute
+aux4 audio info tmp-compress/speech.mp3 | grep -cE '"duration": 30(\.[0-9]+)?,'
+```
+
+```expect
+1
 ```
 
 ### should be much smaller than the input

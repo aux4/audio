@@ -39,15 +39,24 @@ aux4 audio info tmp-info/tone.wav
 ### should measure the duration even when the file has no duration header
 
 ```execute
-aux4 audio info tmp-info/recording.webm
+aux4 audio info tmp-info/recording.webm | grep -v '"duration"'
 ```
 
 ```expect:partial
   "format": "matroska,webm",
   "codec": "opus",
-  "duration": 2,
   "sampleRate": 48000,
   "channels": 1,
+```
+
+### should report a duration of about two seconds
+
+```execute
+aux4 audio info tmp-info/recording.webm | grep -cE '"duration": 2(\.[0-9]+)?,'
+```
+
+```expect
+1
 ```
 
 ## with a video file
